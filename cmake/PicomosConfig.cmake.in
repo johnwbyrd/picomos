@@ -1,0 +1,37 @@
+# PicomosConfig.cmake — installed as share/picomos/cmake/PicomosConfig.cmake
+# so that downstream projects can:
+#
+#   find_package(Picomos REQUIRED)
+#   picomos_add_executable(hello MACHINE zbc SOURCES main.c)
+
+@PACKAGE_INIT@
+
+# PICOMOS_ROOT is the SDK install prefix (the directory containing bin/,
+# mos-elf/, share/). Derive it from this file's location.
+get_filename_component(_this_dir "${CMAKE_CURRENT_LIST_FILE}" DIRECTORY)
+get_filename_component(PICOMOS_ROOT "${_this_dir}/../../.." ABSOLUTE)
+
+# Sysroot path (users can pass this to their own compiler invocations).
+set(PICOMOS_SYSROOT "${PICOMOS_ROOT}/mos-elf")
+
+# Configs directory (one .cfg per installed machine).
+set(PICOMOS_CONFIGS_DIR "${PICOMOS_ROOT}/share/picomos/configs")
+
+# Enumerate installed machines.
+file(GLOB _machine_cfgs "${PICOMOS_CONFIGS_DIR}/picomos-*.cfg")
+set(PICOMOS_MACHINES "")
+foreach(_cfg IN LISTS _machine_cfgs)
+    get_filename_component(_name "${_cfg}" NAME_WE)
+    string(REGEX REPLACE "^picomos-" "" _name "${_name}")
+    list(APPEND PICOMOS_MACHINES "${_name}")
+endforeach()
+
+# Provide the compiler path if picomos shipped one; otherwise expect
+# mos-clang on PATH.
+find_program(PICOMOS_MOS_CLANG mos-clang
+    HINTS "${PICOMOS_ROOT}/bin"
+    DOC   "llvm-mos clang driver bundled with picomos")
+
+include("${_this_dir}/PicomosApp.cmake")
+
+check_required_components(Picomos)

@@ -1,27 +1,36 @@
 # hello (zbc)
 
-The smallest complete picomos example: prints one line via the ZBC
-semihost device and exits.
+Smallest complete picomos example — prints one line via the ZBC semihost
+device and exits.
 
-## Build
+Three equivalent build workflows are shown below. Each one produces the
+same `hello.elf`; pick whichever fits your project.
 
-Once the picomos CLI exists:
-
-```sh
-picomos build zbc hello
-```
-
-Under the hood, this links `main.c` against:
-
-- `dist/picolibc/lib/libc.a`             (shared across all MOS machines)
-- `dist/machines/zbc/crt0.o`             (ZBC-specific startup)
-- `dist/machines/zbc/io.a`               (ZBC semihost backend)
-- `dist/machines/zbc/link.ld`            (ZBC memory map)
-
-## Run
+## Direct compiler
 
 ```sh
-../../../machines/zbc/run.sh hello.elf
+export PICOMOS=/opt/picomos           # wherever you installed picomos
+mos-clang --config=$PICOMOS/share/picomos/configs/picomos-zbc.cfg \
+          main.c -o hello.elf
+$PICOMOS/mos-elf/usr/share/picomos/machines/zbc/run.sh hello.elf
 ```
 
 Expected output: `hello, mos`
+
+## Make
+
+See [`Makefile`](Makefile) — two lines of substance, driven entirely by
+the picomos-zbc.cfg config file.
+
+```sh
+make PICOMOS=/opt/picomos
+```
+
+## CMake
+
+See [`CMakeLists.txt`](CMakeLists.txt) — uses `find_package(Picomos)`.
+
+```sh
+cmake -B build -DPicomos_DIR=/opt/picomos/share/picomos/cmake
+cmake --build build
+```

@@ -1,44 +1,66 @@
 name: release
 
-# Build picomos artifacts for each supported host OS and publish a
-# release bundle. picolibc + the MOS-target overlays are host-independent
-# and built once on Linux; the toolchain (llvm-mos clang/lld) is built
-# natively on each host runner.
+# Two-stage build:
+#
+#   Job A (linux only): produces picolibc-mos.tar.xz — the MOS-target
+#     artifacts (headers + libc.a + libm.a). meson runs HERE and only
+#     here; picolibc's build story is Linux-tested.
+#
+#   Job B (matrix: linux, macos, windows): downloads a prebuilt llvm-mos
+#     for the runner's host + the picolibc tarball from Job A, then runs
+#     `cmake --install` in PREBUILT mode to assemble the sysroot and
+#     write the clang config files. No meson runs on macOS or Windows.
+#
+# The result is three per-host bundles, all containing the same
+# host-independent MOS target artifacts.
 
 on:
   push:
     tags: ['v*']
   workflow_dispatch:
 
+env:
+  # Pin the versions we ship. Bump these to update the SDK.
+  LLVM_MOS_VERSION:   'v20.1.0'     # TODO: pick an actual llvm-mos release tag
+  PICOLIBC_VERSION:   '1.8.12'
+
 jobs:
-  # Host-independent artifacts: picolibc for MOS + all machine overlays.
-  # Built once, reused by all three host bundles.
-  target-artifacts:
+
+  # ------------------------------------------------------------------ Job A
+  target-picolibc:
+    name: Build picolibc-mos (Linux)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-      - name: Install build deps
-        run: sudo apt-get update && sudo apt-get install -y meson ninja-build
-      - name: Fetch/build llvm-mos (for the picolibc build only)
-        run: echo "TODO: cache a Linux llvm-mos toolchain here"
-      - name: Build picolibc (once, for MOS arch)
-        run: ./scripts/build-picolibc.sh
-      - name: Build every machine overlay
+
+      - name: Install meson + ninja
         run: |
-          for m in machines/*/manifest.toml; do
-            ./scripts/build-machine.sh "$(basename "$(dirname "$m")")"
-          done
+          pipx install meson
+          pipx install ninja
+
+      - name: Configure picomos (build-picolibc-from-source)
+        run: |
+          cmake -B build \
+            -DPICOMOS_LLVM_MOS_DOWNLOAD=${{ env.LLVM_MOS_VERSION }} \
+            -DPICOMOS_PICOLIBC_REF=${{ env.PICOLIBC_VERSION }} \
+            -DPICOMOS_MACHINES="zbc" \
+            -DCMAKE_INSTALL_PREFIX=$PWD/stage
+
+      - name: Build picolibc for MOS
+        run: cmake --build build --target picolibc-mos
+
+      - name: Package picolibc-mos.tar.xz
+        run: cmake --build build --target picolibc-mos-tarball
+
       - uses: actions/upload-artifact@v4
         with:
-          name: picomos-target
-          path: dist/
+          name: picolibc-mos
+          path: build/picolibc-mos.tar.xz
 
-  # Host-native toolchain per OS. Bundled together with the target
-  # artifacts above into a per-host release archive.
-  host-bundle:
-    needs: target-artifacts
+  # ------------------------------------------------------------------ Job B
+  bundle:
+    name: Bundle picomos (${{ matrix.host }})
+    needs: target-picolibc
     strategy:
       fail-fast: false
       matrix:
@@ -55,21 +77,49 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: lukka/get-cmake@latest
+
+      - name: Download picolibc-mos tarball from Job A
+        uses: actions/download-artifact@v4
         with:
-          name: picomos-target
-          path: dist/
-      - name: Build/fetch llvm-mos for this host
-        run: echo "TODO: build llvm-mos natively for ${{ matrix.host }}"
-      - name: Assemble picomos bundle
-        run: echo "TODO: package dist/ + llvm-mos into picomos-<version>-${{ matrix.host }}.${{ matrix.archive }}"
+          name: picolibc-mos
+          path: prebuilt/
+
+      - name: Configure picomos (prebuilt mode — no meson on this host)
+        shell: bash
+        run: |
+          cmake -B build \
+            -DPICOMOS_LLVM_MOS_DOWNLOAD=${{ env.LLVM_MOS_VERSION }} \
+            -DPICOMOS_PICOLIBC_PREBUILT=$PWD/prebuilt/picolibc-mos.tar.xz \
+            -DPICOMOS_MACHINES="zbc" \
+            -DPICOMOS_INSTALL_TOOLCHAIN=ON \
+            -DCMAKE_INSTALL_PREFIX=$PWD/dist/picomos-${{ matrix.host }}
+
+      - name: Build machine overlays + config files
+        run: cmake --build build
+
+      - name: Install into the SDK layout
+        run: cmake --install build
+
+      - name: Package
+        shell: bash
+        run: |
+          cd dist
+          if [ "${{ matrix.archive }}" = "zip" ]; then
+            7z a picomos-${{ matrix.host }}.zip picomos-${{ matrix.host }}/
+          else
+            tar -cJf picomos-${{ matrix.host }}.tar.xz picomos-${{ matrix.host }}
+          fi
+
       - uses: actions/upload-artifact@v4
         with:
           name: picomos-${{ matrix.host }}
-          path: picomos-*.${{ matrix.archive }}
+          path: dist/picomos-${{ matrix.host }}.${{ matrix.archive }}
 
+  # ----------------------------------------------------------------- release
   release:
-    needs: host-bundle
+    name: Publish release
+    needs: bundle
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
@@ -78,4 +128,4 @@ jobs:
           pattern: picomos-*
           merge-multiple: true
       - name: Publish
-        run: echo "TODO: gh release create with the three host bundles"
+        run: 'echo "TODO gh release create with the three host bundles"'

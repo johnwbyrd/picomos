@@ -1,27 +1,108 @@
 # picomos
 
-A batteries-included SDK for building software targeting MOS 6502-family
-machines with the [llvm-mos](https://llvm-mos.org/) toolchain and
-[picolibc](https://github.com/picolibc/picolibc).
+A batteries-included cross-development SDK for building software targeting
+MOS 6502-family machines with the [llvm-mos](https://llvm-mos.org/)
+toolchain and [picolibc](https://github.com/picolibc/picolibc).
 
 **Status:** early scaffolding. Nothing here works yet.
 
 ## What this is
 
-picomos bundles, per host OS:
+A real SDK, not a build wrapper. Once installed, picomos looks and behaves
+like every other cross-toolchain SDK you have used (arm-none-eabi,
+esp-idf, Zephyr SDK, STM32Cube):
 
-- **llvm-mos** — clang/lld built with the MOS backend
-- **picolibc** — C library, prebuilt **once** for the MOS architecture
-  (`libc.a`, `libm.a`, arch-specific startup fragments — shared by every
-  supported machine)
-- **Machine overlays** — the bits that actually differ per target machine:
-  linker script, `crt0.o`, machine-specific I/O backend, emulator glue
-  (Commodore 64, NES, Apple II, ZBC/MAME, ...)
-- **Examples** — a working hello-world per machine
+- A **host toolchain** (llvm-mos: `mos-clang`, `mos-clang++`, `llvm-ar`, ...)
+- A **sysroot** under `mos-elf/` containing picolibc headers and libraries
+- **Machine overlays** under `mos-elf/usr/share/picomos/machines/<name>/`
+  contributing the per-machine linker script, `crt0.o`, and I/O backend
+- **Clang config files** so users invoke the compiler normally:
 
-The goal is: install picomos, pick a machine, `picomos build hello`, run it
-in an emulator. No hand-configuring cross files, no chasing toolchain
-revisions, no assembling the linker script yourself.
+```sh
+mos-clang --config=$PICOMOS/share/picomos/configs/picomos-zbc.cfg \
+          main.c -o hello.elf
+```
+
+The compiler discovers headers, libraries, `crt0.o`, and the linker script
+from the sysroot. No picomos-specific tools required.
+
+## Installed layout
+
+```text
+picomos-<version>-<host>/
+├── bin/                              host binaries (llvm-mos toolchain)
+│   ├── mos-clang
+│   ├── mos-clang++
+│   ├── llvm-ar
+│   └── ...
+│
+├── mos-elf/                          THE SYSROOT
+│   └── usr/
+│       ├── include/                  picolibc headers (stdio.h, stdlib.h, ...)
+│       ├── lib/                      arch-shared: libc.a, libm.a
+│       └── share/picomos/
+│           └── machines/
+│               ├── zbc/
+│               │   ├── crt0.o
+│               │   ├── link.ld
+│               │   ├── libio.a
+│               │   └── run.sh
+│               ├── c64/              (planned)
+│               └── ...
+│
+└── share/picomos/
+    ├── configs/                      clang config files, one per machine
+    │   ├── picomos-zbc.cfg
+    │   ├── picomos-c64.cfg
+    │   └── ...
+    ├── cmake/
+    │   └── PicomosConfig.cmake       for downstream find_package(Picomos)
+    ├── examples/                     copyable example sources
+    └── docs/
+```
+
+## User workflows
+
+All three are first-class. Pick your build system, not ours.
+
+### 1. Direct compiler invocation
+
+```sh
+mos-clang --config=$PICOMOS/share/picomos/configs/picomos-zbc.cfg \
+          main.c -o hello.elf
+$PICOMOS/mos-elf/usr/share/picomos/machines/zbc/run.sh hello.elf
+```
+
+### 2. Makefile
+
+```make
+PICOMOS ?= /opt/picomos
+CC       = mos-clang
+CFLAGS   = --config=$(PICOMOS)/share/picomos/configs/picomos-zbc.cfg
+
+hello.elf: main.c
+	$(CC) $(CFLAGS) $< -o $@
+```
+
+### 3. CMake
+
+```cmake
+find_package(Picomos REQUIRED)
+picomos_add_executable(hello MACHINE zbc SOURCES main.c)
+```
+
+`picomos_add_executable` is a thin convenience — it expands to the same
+`--config=picomos-<machine>.cfg` invocation as workflow 1.
+
+## Everything runs through CMake at build time
+
+CMake is the only build driver for producing picomos itself. It runs
+identically on Linux, macOS, and Windows, so per-host shell scripts are
+avoided. picolibc's meson build is invoked via `ExternalProject`; machine
+overlays and config files are plain CMake subprojects. The only shell
+scripts in the tree are the emulator launchers (`machines/*/run.sh`),
+and even those will get Windows equivalents before we claim Windows
+support.
 
 ## Build model
 
@@ -31,68 +112,145 @@ a NES — that's decided at final link time by the machine's linker script
 and `crt0.o`. picomos reflects this:
 
 ```text
-                  built once per release
+                built once per release
   ┌────────────────────────────────────────────┐
   │  llvm-mos toolchain (per host OS)          │
-  │  picolibc for MOS: libc.a, libm.a,         │
-  │    arch-specific startup fragments         │
+  │  picolibc for MOS: libc.a, libm.a          │
+  │    -> installed to mos-elf/usr/{include,lib}/
   └────────────────────────────────────────────┘
                           │
         ┌─────────────────┼─────────────────┐
         ▼                 ▼                 ▼
     machines/c64      machines/nes      machines/zbc
-    linker.ld         linker.ld         linker.ld
+    link.ld           link.ld           link.ld
     crt0.o            crt0.o            crt0.o
-    kernal_io.o       null_io.o         zbc_io.o
+    libio.a           libio.a           libio.a
     vice runner       mesen runner      mame runner
+
+    -> installed to mos-elf/usr/share/picomos/machines/<name>/
+    -> plus share/picomos/configs/picomos-<name>.cfg pointing at them
 ```
 
-## What this is NOT
+## Bootstrapping — where llvm-mos and picolibc come from
 
-- **A replacement for llvm-mos or picolibc.** Upstream fixes go upstream.
-  picomos just ships known-good combinations.
-- **A build environment.** picomos runs your compiled programs; it does not
-  compile itself in-place. Prebuilt artifacts are published per release.
+picomos does not require you to have llvm-mos or picolibc pre-installed.
+Both come in through the configure step.
+
+### Two ways to acquire llvm-mos
+
+- **`-DPICOMOS_LLVM_MOS_ROOT=<path>`** — use an already-built tree on
+  disk (typical for local development).
+- **`-DPICOMOS_LLVM_MOS_DOWNLOAD=<tag>`** — download a prebuilt release
+  from the [llvm-mos releases page](https://github.com/llvm-mos/llvm-mos/releases)
+  for this host (typical for CI / release bundling).
+
+### Acquiring picolibc
+
+picolibc does not publish prebuilt binaries for MOS — nobody upstream
+builds them. picomos has to produce them itself:
+
+- **`-DPICOMOS_PICOLIBC_SOURCE=<path>`** or
+  **`-DPICOMOS_PICOLIBC_REF=<tag>`** — build from source with meson.
+  Requires meson + ninja on the build host. **Supported on Linux only.**
+  Trying to build from source on Windows fails fast with a clear error
+  pointing at the alternative below. macOS may work but is untested.
+
+- **`-DPICOMOS_PICOLIBC_PREBUILT=<file-or-url>`** — extract an already-
+  built `picolibc-mos.tar.xz`. Nothing on the host needs meson. The
+  tarball has to come from somewhere:
+
+  - **In CI:** stage 1 of [our release workflow](.github/workflows/release.yml)
+    builds it on Linux and hands it to the macOS/Windows matrix jobs as
+    an `actions/upload-artifact`. No external URL involved.
+  - **On a dev machine:** until picomos itself has released once, the
+    only source is a `.tar.xz` you (or someone) built on Linux and
+    copied over. From picomos v1 onward we publish
+    `picolibc-mos.tar.xz` alongside the host bundles as a release
+    asset, and macOS/Windows devs can point `PICOMOS_PICOLIBC_PREBUILT`
+    at that URL.
+
+This is a genuine chicken-and-egg for the first release. It only bites
+macOS/Windows developers who want to build picomos itself from source
+before we've cut a release. macOS/Windows end users of picomos never
+build anything — they download and unzip a host bundle.
+
+## Quick start — developer (building everything from source, Linux)
+
+```sh
+cmake -B build \
+    -DPICOMOS_LLVM_MOS_ROOT=$HOME/git/llvm-mos/build/install \
+    -DPICOMOS_MACHINES="zbc;c64" \
+    -DCMAKE_INSTALL_PREFIX=$HOME/opt/picomos
+cmake --build build
+cmake --install build
+```
+
+## Packaging a release (CI-only)
+
+The release workflow in [.github/workflows/release.yml](.github/workflows/release.yml)
+runs the two-stage build on GitHub Actions. In practice you don't run
+this by hand — you push a tag and the workflow does it. It's documented
+here so the shape is visible:
+
+```sh
+# Stage 1 (Linux only): produce picolibc-mos.tar.xz once.
+cmake -B build \
+    -DPICOMOS_LLVM_MOS_DOWNLOAD=v20.1.0 \
+    -DPICOMOS_MACHINES="zbc"
+cmake --build build --target picolibc-mos-tarball
+
+# Stage 2 (each host runner in the matrix): reuse the tarball,
+# add the host toolchain, assemble the sysroot. No meson runs here.
+cmake -B build \
+    -DPICOMOS_LLVM_MOS_DOWNLOAD=v20.1.0 \
+    -DPICOMOS_PICOLIBC_PREBUILT=$PWD/build/picolibc-mos.tar.xz \
+    -DPICOMOS_INSTALL_TOOLCHAIN=ON \
+    -DCMAKE_INSTALL_PREFIX=$PWD/dist/picomos-linux-x86_64
+cmake --build build
+cmake --install build
+```
 
 ## Supported host OSes
 
-- Linux (x86_64, aarch64)
-- macOS (arm64, x86_64)
-- Windows (x86_64)
+- Linux (x86_64, aarch64) — full build-from-source support
+- macOS (arm64, x86_64) — prebuilt picolibc only (meson untested)
+- Windows (x86_64) — prebuilt picolibc only (meson unsupported by picolibc)
 
-Host binaries are produced by a matrix build on GitHub Actions, one runner
-per host. The MOS-target artifacts (picolibc, examples) are host-independent
-and built once on Linux.
+Host binaries are produced by a matrix build on GitHub Actions: one
+Linux job produces `picolibc-mos.tar.xz`; three matrix jobs (Linux,
+macOS, Windows) each consume it and produce the corresponding host
+bundle.
 
-## Layout
+## Repo layout
 
 ```text
-picolibc/       # pinned picolibc source (submodule or fetched at build time)
+CMakeLists.txt         top-level driver
 
-machines/       # per-machine overlays
-  zbc/          # ZBC (MAME zbcm6502)
-    manifest.toml
-    linker/     # memory.ld, sections.ld, ...
-    crt/        # startup sources compiled into crt0.o per machine
-    io/         # machine-specific I/O backend (semihost, KERNAL, ...)
-    run.sh      # emulator invocation
-  c64/          # (planned)
-  nes/          # (planned)
-  apple2/       # (planned)
+cmake/
+  PicomosLlvmMos.cmake       locates mos-clang + libclang_rt.builtins
+  PicomosPicolibc.cmake      builds picolibc ONCE via ExternalProject,
+                             installs into <install>/mos-elf/usr/{include,lib}
+  PicomosMachine.cmake       picomos_machine() helper — compiles per-machine
+                             crt0/io, assembles linker script, installs into
+                             mos-elf/usr/share/picomos/machines/<name>/
+  PicomosConfigWrite.cmake   generates share/picomos/configs/picomos-<mach>.cfg
+                             (clang config file: --sysroot, -T, crt0.o, ...)
+  PicomosConfig.cmake.in     installed as share/picomos/cmake/PicomosConfig.cmake
+                             for downstream find_package(Picomos)
 
-examples/       # example programs per machine
-  zbc/hello/
-  ...
+machines/                    per-machine overlays
+  zbc/
+    CMakeLists.txt           picomos_machine(zbc ...)
+    manifest.toml            display name, cpu, emulator
+    linker/                  memory.ld, sections.ld
+    crt/                     startup sources
+    io/                      machine-specific I/O
+    run.sh                   emulator invocation
 
-scripts/
-  build-picolibc.sh    # builds picolibc ONCE for MOS -> dist/picolibc/
-  build-machine.sh     # per-machine: linker + crt0 + io  -> dist/machines/<m>/
-  build-example.sh     # links user program against picolibc + machine overlay
-  bootstrap.sh         # end-user installer (fetches release artifact)
+examples/                    (built out-of-tree against installed SDK)
+  zbc/hello/{CMakeLists.txt,main.c}
 
-docs/           # quickstart, machine notes, contribution guide
-
-.github/workflows/  # matrix CI producing per-host release bundles
+.github/workflows/           matrix CI producing per-host release bundles
 ```
 
 ## License
