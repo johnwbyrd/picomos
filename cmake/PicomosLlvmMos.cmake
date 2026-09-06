@@ -80,6 +80,11 @@ elseif(PICOMOS_LLVM_MOS_REF)
             -DLLVM_INCLUDE_BENCHMARKS:BOOL=OFF
             -DLLVM_BUILD_TESTS:BOOL=OFF
             -DCLANG_DEFAULT_LINKER:STRING=lld
+            # clang picks target/mode from argv[0]; without these links the
+            # install has only `clang`, and every downstream picomos step
+            # (picolibc cross-file, config templates, PICOMOS_MOS_CLANG)
+            # looks for `mos-clang`.
+            -DCLANG_LINKS_TO_CREATE:STRING=mos-clang$<SEMICOLON>mos-clang++$<SEMICOLON>mos-clang-cpp$<SEMICOLON>mos-unknown-unknown-clang$<SEMICOLON>mos-unknown-unknown-clang++
         BUILD_COMMAND
             ${CMAKE_COMMAND} --build <BINARY_DIR> --target install
         INSTALL_COMMAND ""    # install is folded into BUILD_COMMAND

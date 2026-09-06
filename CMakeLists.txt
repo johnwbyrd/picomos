@@ -25,7 +25,13 @@ set(PICOMOS_LLVM_MOS_ROOT "" CACHE PATH
 set(PICOMOS_PICOLIBC_SOURCE "" CACHE PATH
     "Path to a picolibc source tree. If empty, FetchContent pulls a pinned ref.")
 
-set(PICOMOS_PICOLIBC_REF "1.8.12" CACHE STRING
+set(PICOMOS_PICOLIBC_REPOSITORY "https://github.com/johnwbyrd/picolibc.git"
+    CACHE STRING
+    "picolibc git repository to fetch when PICOMOS_PICOLIBC_SOURCE is empty. \
+Defaults to the picomos-maintained fork with MOS support, since upstream \
+picolibc has no MOS arch yet.")
+
+set(PICOMOS_PICOLIBC_REF "feature/upstream-rebase-2026-09" CACHE STRING
     "picolibc git tag/branch/SHA to fetch when PICOMOS_PICOLIBC_SOURCE is empty.")
 
 set(PICOMOS_MACHINES "zbc" CACHE STRING

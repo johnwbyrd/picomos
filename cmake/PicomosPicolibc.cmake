@@ -88,7 +88,7 @@ else()
         set(_picolibc_src "${PICOMOS_PICOLIBC_SOURCE}")
     else()
         FetchContent_Declare(picolibc
-            GIT_REPOSITORY https://github.com/picolibc/picolibc.git
+            GIT_REPOSITORY ${PICOMOS_PICOLIBC_REPOSITORY}
             GIT_TAG        ${PICOMOS_PICOLIBC_REF}
             GIT_SHALLOW    TRUE)
         FetchContent_Populate(picolibc)

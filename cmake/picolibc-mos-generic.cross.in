@@ -7,7 +7,7 @@
 c   = ['@PICOMOS_MOS_CLANG@', '-nostdlib', '-flto',
        '-D__COMPILING_MOS_LIBC__', '-D__IEEE_LITTLE_ENDIAN', '-D_LDBL_EQ_DBL',
        '-Oz', '-g', '-Wno-tautological-compare']
-ar  = 'llvm-ar'
+ar  = '@PICOMOS_MOS_AR@'
 as  = '@PICOMOS_MOS_CLANG@'
 
 [host_machine]
