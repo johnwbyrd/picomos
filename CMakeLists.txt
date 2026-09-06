@@ -34,8 +34,25 @@ picolibc has no MOS arch yet.")
 set(PICOMOS_PICOLIBC_REF "feature/upstream-rebase-2026-09" CACHE STRING
     "picolibc git tag/branch/SHA to fetch when PICOMOS_PICOLIBC_SOURCE is empty.")
 
-set(PICOMOS_MACHINES "zbc;c64" CACHE STRING
-    "Semicolon-separated list of machines to build (subdirs of machines/).")
+# Default machine list = every subdir of machines/ that carries a
+# CMakeLists.txt. Consumers or CI can override to build a subset:
+# -DPICOMOS_MACHINES="zbc" to skip c64, etc. Adding a new machine
+# means dropping a directory under machines/ — no top-level edit here.
+file(GLOB _picomos_machine_dirs
+    RELATIVE "${CMAKE_SOURCE_DIR}/machines"
+    "${CMAKE_SOURCE_DIR}/machines/*")
+set(_picomos_default_machines "")
+foreach(_m IN LISTS _picomos_machine_dirs)
+    if(IS_DIRECTORY "${CMAKE_SOURCE_DIR}/machines/${_m}"
+       AND EXISTS "${CMAKE_SOURCE_DIR}/machines/${_m}/CMakeLists.txt")
+        list(APPEND _picomos_default_machines "${_m}")
+    endif()
+endforeach()
+
+set(PICOMOS_MACHINES "${_picomos_default_machines}" CACHE STRING
+    "Semicolon-separated list of machines to build. Defaults to every \
+subdir of machines/ that contains a CMakeLists.txt (auto-discovered). \
+Override to build a subset, e.g. -DPICOMOS_MACHINES=zbc.")
 
 option(PICOMOS_INSTALL_TOOLCHAIN
     "Install the llvm-mos toolchain into <prefix>/bin/ (off during dev when \

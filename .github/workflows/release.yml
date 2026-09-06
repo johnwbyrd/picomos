@@ -51,7 +51,6 @@ jobs:
           cmake -B build -G Ninja \
             -DPICOMOS_LLVM_MOS_REF=${{ env.LLVM_MOS_REF }} \
             -DPICOMOS_PICOLIBC_REF=${{ env.PICOLIBC_VERSION }} \
-            -DPICOMOS_MACHINES="zbc" \
             -DCMAKE_INSTALL_PREFIX=$PWD/stage
 
       - name: Build llvm-mos + picolibc
@@ -103,7 +102,6 @@ jobs:
           cmake -B build -G Ninja \
             -DPICOMOS_LLVM_MOS_REF=${{ env.LLVM_MOS_REF }} \
             -DPICOMOS_PICOLIBC_PREBUILT=$PWD/prebuilt/picolibc-mos.tar.xz \
-            -DPICOMOS_MACHINES="zbc;c64" \
             -DPICOMOS_INSTALL_TOOLCHAIN=ON \
             -DPICOMOS_HOST_LABEL=${{ matrix.host }}
 

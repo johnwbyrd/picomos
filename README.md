@@ -217,11 +217,13 @@ Fast local iteration (skip llvm-mos build, reuse an existing tree):
 
 ```sh
 cmake -B build -G Ninja \
-    -DPICOMOS_LLVM_MOS_ROOT=/path/to/existing/llvm-mos/install \
-    -DPICOMOS_MACHINES="zbc;c64"
+    -DPICOMOS_LLVM_MOS_ROOT=/path/to/existing/llvm-mos/install
 cmake --build build
 cmake --install build --prefix ./stage
 ```
+
+Every subdirectory of `machines/` with a `CMakeLists.txt` is built by
+default. Restrict to a subset with e.g. `-DPICOMOS_MACHINES=zbc`.
 
 Full CMake option reference lives at the top of
 [CMakeLists.txt](CMakeLists.txt). The CI matrix that produces the shipped
@@ -241,8 +243,10 @@ Copy `machines/zbc/` or `machines/c64/` as a starting point and adjust:
 - `run.sh` — emulator invocation.
 - `CMakeLists.txt` — one call to `picomos_machine(<name> ...)`.
 
-Add the machine to `PICOMOS_MACHINES` at configure time and it lands in
-the SDK bundle alongside the existing targets.
+The new machine's directory is auto-discovered by picomos's top-level
+CMakeLists.txt and lands in the SDK bundle alongside the existing
+targets — no top-level edit needed. Use `-DPICOMOS_MACHINES=<subset>`
+if you want to exclude it from a build.
 
 ## License
 
