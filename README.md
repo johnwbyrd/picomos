@@ -63,7 +63,7 @@ picomos-<version>-<host>/
 
 ## User workflows
 
-All three are first-class. Pick your build system, not ours.
+Two first-class paths. Both work identically on Linux, macOS, and Windows.
 
 ### 1. Direct compiler invocation
 
@@ -73,18 +73,7 @@ mos-clang --config=$PICOMOS/share/picomos/configs/picomos-zbc.cfg \
 $PICOMOS/mos-elf/usr/share/picomos/machines/zbc/run.sh hello.elf
 ```
 
-### 2. Makefile
-
-```make
-PICOMOS ?= /opt/picomos
-CC       = mos-clang
-CFLAGS   = --config=$(PICOMOS)/share/picomos/configs/picomos-zbc.cfg
-
-hello.elf: main.c
-	$(CC) $(CFLAGS) $< -o $@
-```
-
-### 3. CMake
+### 2. CMake
 
 ```cmake
 find_package(Picomos REQUIRED)

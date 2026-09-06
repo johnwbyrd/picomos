@@ -10,7 +10,8 @@ the purpose of exercising the SDK from the outside.
 
 ## Building any example (once picomos is installed)
 
-Any of these three commands works. Pick the one that fits your workflow:
+Either of these works — pick the one that fits your workflow. Both are
+portable to Linux, macOS, and Windows.
 
 ### Direct compiler
 
@@ -18,14 +19,6 @@ Any of these three commands works. Pick the one that fits your workflow:
 mos-clang --config=$PICOMOS/share/picomos/configs/picomos-zbc.cfg \
           main.c -o hello.elf
 ```
-
-### Make
-
-```sh
-make PICOMOS=/opt/picomos MACHINE=zbc
-```
-
-(each example ships a two-line `Makefile` demonstrating the pattern).
 
 ### CMake
 
