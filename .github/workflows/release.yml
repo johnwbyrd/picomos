@@ -1,0 +1,81 @@
+name: release
+
+# Build picomos artifacts for each supported host OS and publish a
+# release bundle. picolibc + the MOS-target overlays are host-independent
+# and built once on Linux; the toolchain (llvm-mos clang/lld) is built
+# natively on each host runner.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  # Host-independent artifacts: picolibc for MOS + all machine overlays.
+  # Built once, reused by all three host bundles.
+  target-artifacts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install build deps
+        run: sudo apt-get update && sudo apt-get install -y meson ninja-build
+      - name: Fetch/build llvm-mos (for the picolibc build only)
+        run: echo "TODO: cache a Linux llvm-mos toolchain here"
+      - name: Build picolibc (once, for MOS arch)
+        run: ./scripts/build-picolibc.sh
+      - name: Build every machine overlay
+        run: |
+          for m in machines/*/manifest.toml; do
+            ./scripts/build-machine.sh "$(basename "$(dirname "$m")")"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: picomos-target
+          path: dist/
+
+  # Host-native toolchain per OS. Bundled together with the target
+  # artifacts above into a per-host release archive.
+  host-bundle:
+    needs: target-artifacts
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            host: linux-x86_64
+            archive: tar.xz
+          - os: macos-latest
+            host: macos-arm64
+            archive: tar.xz
+          - os: windows-latest
+            host: windows-x86_64
+            archive: zip
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: picomos-target
+          path: dist/
+      - name: Build/fetch llvm-mos for this host
+        run: echo "TODO: build llvm-mos natively for ${{ matrix.host }}"
+      - name: Assemble picomos bundle
+        run: echo "TODO: package dist/ + llvm-mos into picomos-<version>-${{ matrix.host }}.${{ matrix.archive }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: picomos-${{ matrix.host }}
+          path: picomos-*.${{ matrix.archive }}
+
+  release:
+    needs: host-bundle
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: picomos-*
+          merge-multiple: true
+      - name: Publish
+        run: echo "TODO: gh release create with the three host bundles"

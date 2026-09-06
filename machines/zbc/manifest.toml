@@ -1,0 +1,21 @@
+# ZBC — the reference/testing machine used by picolibc's MOS port.
+# Runs under MAME's zbcm6502 driver.
+
+name         = "zbc"
+display_name = "ZBC (MAME zbcm6502)"
+cpu          = "6502"
+endianness   = "little"
+
+# Rough memory map — authoritative details live in linker/memory.ld.
+[memory]
+description = "63 KB RAM at 0x0000-0xFCDF, semihost device 0xFCE0-0xFCFF, vectors at 0xFFFA"
+
+[emulator]
+name    = "mame"
+driver  = "zbcm6502"
+runner  = "run.sh"
+
+[picolibc]
+# Path (relative to picomos root) or upstream ref.
+# Pinned to a known-good SHA/tag; the release workflow bumps this.
+ref     = "1.8.12"
