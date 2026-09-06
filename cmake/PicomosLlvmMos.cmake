@@ -84,7 +84,13 @@ elseif(PICOMOS_LLVM_MOS_REF)
             # install has only `clang`, and every downstream picomos step
             # (picolibc cross-file, config templates, PICOMOS_MOS_CLANG)
             # looks for `mos-clang`.
-            -DCLANG_LINKS_TO_CREATE:STRING=mos-clang$<SEMICOLON>mos-clang++$<SEMICOLON>mos-clang-cpp$<SEMICOLON>mos-unknown-unknown-clang$<SEMICOLON>mos-unknown-unknown-clang++
+            #
+            # Include the standard clang++ / clang-cl / clang-cpp aliases
+            # explicitly — this variable REPLACES LLVM's default set, so
+            # omitting them means the compiler-rt runtimes cross-build
+            # can't find clang++ in the build tree and fails during LLVM
+            # main compile (observed on llvm-mos main >= 2026-09-06).
+            -DCLANG_LINKS_TO_CREATE:STRING=clang++$<SEMICOLON>clang-cl$<SEMICOLON>clang-cpp$<SEMICOLON>mos-clang$<SEMICOLON>mos-clang++$<SEMICOLON>mos-clang-cpp$<SEMICOLON>mos-unknown-unknown-clang$<SEMICOLON>mos-unknown-unknown-clang++
         BUILD_COMMAND
             ${CMAKE_COMMAND} --build <BINARY_DIR> --target install
         INSTALL_COMMAND ""    # install is folded into BUILD_COMMAND
