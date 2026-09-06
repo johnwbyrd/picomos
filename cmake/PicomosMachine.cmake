@@ -30,6 +30,13 @@ function(picomos_machine machine_name)
         ""
         "CRT_SOURCES;IO_SOURCES;LINKER_PARTS;DEFINES")
 
+    # If llvm-mos is being built from source in this run, custom
+    # commands that invoke mos-clang must wait for it.
+    set(_machine_extra_deps "")
+    if(TARGET llvm-mos)
+        list(APPEND _machine_extra_deps llvm-mos)
+    endif()
+
     # Where inside the sysroot this machine's overlay lives.
     set(_rel  "usr/share/picomos/machines/${machine_name}")
     set(_dest "${PICOMOS_SYSROOT_RELATIVE}/${_rel}")
@@ -71,7 +78,7 @@ function(picomos_machine machine_name)
                     ${_crt_defs}
                     -r -o "${_crt0_o}"
                     ${_abs_crt_sources}
-            DEPENDS ${_abs_crt_sources} picolibc-mos
+            DEPENDS ${_abs_crt_sources} picolibc-mos ${_machine_extra_deps}
             COMMENT "picomos[${machine_name}]: compiling crt0.o")
         add_custom_target(${machine_name}-crt0 ALL DEPENDS "${_crt0_o}")
         install(FILES "${_crt0_o}" DESTINATION "${_dest}")
@@ -96,7 +103,7 @@ function(picomos_machine machine_name)
                         -nostdlib -Oz -flto
                         -isystem "${PICOMOS_PICOLIBC_STAGING}/usr/include"
                         -c -o "${_obj}" "${_src}"
-                DEPENDS "${_src}" picolibc-mos
+                DEPENDS "${_src}" picolibc-mos ${_machine_extra_deps}
                 COMMENT "picomos[${machine_name}]: compiling io/${_stem}.o")
         endforeach()
         add_custom_command(

@@ -1,24 +1,87 @@
-# Build outputs
+# -----------------------------------------------------------------------------
+# Build outputs and install prefixes
+# -----------------------------------------------------------------------------
 build/
 build-*/
+stage/
+install/
 dist/
 out/
 
-# Downloaded toolchains
+# Packaged release bundles (produced by cmake --install then tar/zip).
+picomos-*.tar.xz
+picomos-*.tar.gz
+picomos-*.zip
+
+# Downloaded / built-from-source toolchains and their sources.
 toolchain/
 llvm-mos/
+llvm-mos-src/
+llvm-mos-build/
+llvm-mos-install/
+llvm-mos-prebuilt/
 
-# Editors
+# picolibc source pulled in by FetchContent lives under build/, but ignore
+# any stray in-tree checkout too.
+picolibc/
+picolibc-*/
+
+# -----------------------------------------------------------------------------
+# CMake in-tree artifacts
+# Rooted (leading /) so an example project's tracked Makefile at
+# examples/*/hello/Makefile is NOT ignored.
+# -----------------------------------------------------------------------------
+/Makefile
+/CMakeCache.txt
+/CMakeFiles/
+/cmake_install.cmake
+/CTestTestfile.cmake
+/CPackConfig.cmake
+/CPackSourceConfig.cmake
+/install_manifest.txt
+/_deps/
+/Testing/
+
+# -----------------------------------------------------------------------------
+# Editors and IDEs
+# -----------------------------------------------------------------------------
 .vscode/
 .idea/
+.cache/
+.clangd/
+compile_commands.json
 *.swp
+*.swo
 *~
+.#*
+\#*\#
 
+# -----------------------------------------------------------------------------
 # OS junk
+# -----------------------------------------------------------------------------
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# Python
+# -----------------------------------------------------------------------------
+# Python / venvs (helper scripts and CI tooling)
+# -----------------------------------------------------------------------------
 __pycache__/
 *.pyc
+*.pyo
 .venv/
+venv/
+.direnv/
+.envrc.local
+
+# -----------------------------------------------------------------------------
+# Emulator scratch
+# -----------------------------------------------------------------------------
+*.nvram
+mame.ini
+plugin.ini
+ui.ini
+cfg/
+inp/
+sta/
+snap/

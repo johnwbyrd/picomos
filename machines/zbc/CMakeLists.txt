@@ -12,7 +12,3 @@ picomos_machine(zbc
         # linker/memory.ld       # TODO
         # linker/sections.ld
 )
-
-# Install the machine's emulator runner for use post-install.
-install(PROGRAMS run.sh
-        DESTINATION machines/zbc)

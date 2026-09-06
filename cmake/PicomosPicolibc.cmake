@@ -101,6 +101,15 @@ else()
         "${_cross_file}"
         @ONLY)
 
+    # If llvm-mos is being built from source in this same CMake run,
+    # picolibc must wait for it. TARGET_EXISTS check avoids adding a
+    # dependency on a target that isn't defined (llvm-mos supplied
+    # externally or via prebuilt).
+    set(_picolibc_depends "")
+    if(TARGET llvm-mos)
+        list(APPEND _picolibc_depends DEPENDS llvm-mos)
+    endif()
+
     ExternalProject_Add(picolibc-mos
         SOURCE_DIR      "${_picolibc_src}"
         BINARY_DIR      "${CMAKE_BINARY_DIR}/picolibc-build"
@@ -116,7 +125,8 @@ else()
         INSTALL_COMMAND
             ${CMAKE_COMMAND} -E env DESTDIR=${_staging}
                 ${MESON_EXE} install -C <BINARY_DIR> --no-rebuild
-        BUILD_ALWAYS FALSE)
+        BUILD_ALWAYS FALSE
+        ${_picolibc_depends})
 
     # For the release workflow: also produce a tarball of the built sysroot
     # so Job B on the non-Linux hosts can consume it via prebuilt mode.

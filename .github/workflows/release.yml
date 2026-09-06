@@ -20,15 +20,16 @@ on:
   workflow_dispatch:
 
 env:
-  # Pin the versions we ship. Bump these to update the SDK.
-  LLVM_MOS_VERSION:   'v20.1.0'     # TODO: pick an actual llvm-mos release tag
+  # Pin the source refs we ship. Reproducible-from-source is the point;
+  # build takes ~40-60 min on Job A but only runs on tags.
+  LLVM_MOS_REF:       'main'        # TODO: pin to a specific SHA per release
   PICOLIBC_VERSION:   '1.8.12'
 
 jobs:
 
   # ------------------------------------------------------------------ Job A
   target-picolibc:
-    name: Build picolibc-mos (Linux)
+    name: Build picolibc-mos from source (Linux)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -38,15 +39,18 @@ jobs:
           pipx install meson
           pipx install ninja
 
-      - name: Configure picomos (build-picolibc-from-source)
+      # Build llvm-mos AND picolibc from source. This is the slow path
+      # (~40-60 min) but produces a fully reproducible artifact that
+      # depends only on the pinned llvm-mos ref and picolibc version.
+      - name: Configure picomos (build llvm-mos + picolibc from source)
         run: |
           cmake -B build \
-            -DPICOMOS_LLVM_MOS_DOWNLOAD=${{ env.LLVM_MOS_VERSION }} \
+            -DPICOMOS_LLVM_MOS_REF=${{ env.LLVM_MOS_REF }} \
             -DPICOMOS_PICOLIBC_REF=${{ env.PICOLIBC_VERSION }} \
             -DPICOMOS_MACHINES="zbc" \
             -DCMAKE_INSTALL_PREFIX=$PWD/stage
 
-      - name: Build picolibc for MOS
+      - name: Build llvm-mos + picolibc
         run: cmake --build build --target picolibc-mos
 
       - name: Package picolibc-mos.tar.xz
@@ -85,11 +89,15 @@ jobs:
           name: picolibc-mos
           path: prebuilt/
 
-      - name: Configure picomos (prebuilt mode — no meson on this host)
+      # llvm-mos binaries are host-specific, so each matrix runner builds
+      # llvm-mos natively from source at the pinned ref. picolibc is
+      # host-independent and comes from Job A's tarball — no meson runs
+      # on this host, so the macOS/Windows meson gap is irrelevant.
+      - name: Configure picomos (build llvm-mos here, reuse picolibc tarball)
         shell: bash
         run: |
           cmake -B build \
-            -DPICOMOS_LLVM_MOS_DOWNLOAD=${{ env.LLVM_MOS_VERSION }} \
+            -DPICOMOS_LLVM_MOS_REF=${{ env.LLVM_MOS_REF }} \
             -DPICOMOS_PICOLIBC_PREBUILT=$PWD/prebuilt/picolibc-mos.tar.xz \
             -DPICOMOS_MACHINES="zbc" \
             -DPICOMOS_INSTALL_TOOLCHAIN=ON \

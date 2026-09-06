@@ -20,3 +20,17 @@ endian     = 'little'
 skip_sanity_check = true
 libgcc             = ['-L@PICOMOS_LIBRT_DIR@', '-lclang_rt.builtins']
 ram_only           = true
+
+# picomos supplies the MEMORY {} block from each machine's own linker
+# script at final link time. See upstream picolibc PR-2.
+external_memory    = true
+
+# Bake the llvm-mos imaginary register (__rc0..__rc31) definitions and
+# the .vectors section into picolibc's generated linker script. These
+# are architecture-level: every MOS machine uses the same zero-page
+# slots and the same reset/nmi/irq vector layout at 0xFFFA-0xFFFF.
+# picolibc's meson INCLUDE resolver reads these relative to picolibc's
+# source root. The MEMORY {} that hosts these (including the `vectors`
+# region) comes from each machine's link.ld at final link time.
+linker_preamble    = 'INCLUDE picocrt/machine/mos/mos-regs.ld'
+extra_sections     = 'INCLUDE picocrt/machine/mos/mos-sections.ld'

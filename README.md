@@ -136,13 +136,25 @@ and `crt0.o`. picomos reflects this:
 picomos does not require you to have llvm-mos or picolibc pre-installed.
 Both come in through the configure step.
 
-### Two ways to acquire llvm-mos
+### Three ways to acquire llvm-mos
 
+Reproducibility-first, because the SDK build itself is a maintainer/CI
+concern — end users just download and unzip a bundle, so build time on
+this side doesn't affect them:
+
+- **`-DPICOMOS_LLVM_MOS_REF=<git-ref>`** — check out and build llvm-mos
+  from source at the given tag/branch/SHA. **This is the default for
+  the release workflow.** ~40-60 min, ~10 GB scratch, ~8-16 GB RAM.
+  Reproducible from source; no dependency on llvm-mos's release asset
+  naming or cadence.
+- **`-DPICOMOS_LLVM_MOS_DOWNLOAD=<tag>`** — fast local fast-path.
+  Download a prebuilt release from the
+  [llvm-mos releases page](https://github.com/llvm-mos/llvm-mos/releases)
+  for this host. Handy when iterating on picomos itself, not used by
+  the release workflow.
 - **`-DPICOMOS_LLVM_MOS_ROOT=<path>`** — use an already-built tree on
-  disk (typical for local development).
-- **`-DPICOMOS_LLVM_MOS_DOWNLOAD=<tag>`** — download a prebuilt release
-  from the [llvm-mos releases page](https://github.com/llvm-mos/llvm-mos/releases)
-  for this host (typical for CI / release bundling).
+  disk. Typical when you already have llvm-mos built locally for other
+  reasons.
 
 ### Acquiring picolibc
 
@@ -189,20 +201,26 @@ cmake --install build
 
 The release workflow in [.github/workflows/release.yml](.github/workflows/release.yml)
 runs the two-stage build on GitHub Actions. In practice you don't run
-this by hand — you push a tag and the workflow does it. It's documented
-here so the shape is visible:
+this by hand — you push a tag and the workflow does it. Both stages
+build llvm-mos from source at a pinned ref; the whole pipeline takes
+2-3 hours on GitHub-hosted runners. That's fine — releases are
+infrequent and the output is what everyone downloads. Documented here
+so the shape is visible:
 
 ```sh
-# Stage 1 (Linux only): produce picolibc-mos.tar.xz once.
+# Stage 1 (Linux only): build llvm-mos + picolibc from source, produce
+# picolibc-mos.tar.xz for reuse by the matrix hosts.
 cmake -B build \
-    -DPICOMOS_LLVM_MOS_DOWNLOAD=v20.1.0 \
+    -DPICOMOS_LLVM_MOS_REF=<pinned-sha> \
+    -DPICOMOS_PICOLIBC_REF=1.8.12 \
     -DPICOMOS_MACHINES="zbc"
 cmake --build build --target picolibc-mos-tarball
 
-# Stage 2 (each host runner in the matrix): reuse the tarball,
-# add the host toolchain, assemble the sysroot. No meson runs here.
+# Stage 2 (each host runner in the matrix): build llvm-mos NATIVELY for
+# this host (binaries can't be shared across hosts), reuse the picolibc
+# tarball, assemble the sysroot. No meson runs here.
 cmake -B build \
-    -DPICOMOS_LLVM_MOS_DOWNLOAD=v20.1.0 \
+    -DPICOMOS_LLVM_MOS_REF=<pinned-sha> \
     -DPICOMOS_PICOLIBC_PREBUILT=$PWD/build/picolibc-mos.tar.xz \
     -DPICOMOS_INSTALL_TOOLCHAIN=ON \
     -DCMAKE_INSTALL_PREFIX=$PWD/dist/picomos-linux-x86_64
