@@ -129,10 +129,33 @@ function(picomos_machine machine_name)
         install(FILES "${_libio}" DESTINATION "${_dest}")
     endif()
 
-    # --- emulator runner ------------------------------------------------
-    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/run.sh")
-        file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/run.sh" DESTINATION "${_stage_dir}")
-        install(PROGRAMS "${CMAKE_CURRENT_SOURCE_DIR}/run.sh" DESTINATION "${_dest}")
+    # --- emulator runner declarations ----------------------------------
+    # Each machine ships:
+    #   runners.cmake         declarative runner registry (calls
+    #                         picomos_register_runner for each supported
+    #                         emulator). Read at consumer time by
+    #                         picomos_run() from PicomosApp.cmake.
+    #   runner-*.lua|*.py     optional emulator plugin scripts referenced
+    #                         from runners.cmake via {PLUGIN_SCRIPT}.
+    #
+    # Everything portable, no bash. See machines/<name>/runners.cmake for
+    # the format.
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/runners.cmake")
+        file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/runners.cmake"
+             DESTINATION "${_stage_dir}")
+        install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/runners.cmake"
+                DESTINATION "${_dest}")
+    endif()
+    file(GLOB _runner_helpers
+         "${CMAKE_CURRENT_SOURCE_DIR}/runner-*.lua"
+         "${CMAKE_CURRENT_SOURCE_DIR}/runner-*.py")
+    if(_runner_helpers)
+        file(COPY ${_runner_helpers} DESTINATION "${_stage_dir}")
+        install(FILES ${_runner_helpers} DESTINATION "${_dest}")
+    endif()
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/manifest.toml")
+        install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/manifest.toml"
+                DESTINATION "${_dest}")
     endif()
 
     # --- clang config file --------------------------------------------

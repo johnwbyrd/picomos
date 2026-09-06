@@ -68,6 +68,7 @@ configure_package_config_file(
 install(FILES
     "${CMAKE_BINARY_DIR}/PicomosConfig.cmake"
     cmake/PicomosApp.cmake
+    cmake/mos-toolchain.cmake
     DESTINATION share/picomos/cmake)
 
 # --- Optionally bundle the llvm-mos toolchain into the SDK ---------------

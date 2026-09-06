@@ -15,6 +15,17 @@ endianness   = "little"
 description = "0x0800 stack/system, 0x0801-0x9FFF free RAM (BASIC area), BASIC ROM 0xA000-0xBFFF, KERNAL 0xE000-0xFFFF, I/O at 0xD000-0xDFFF"
 
 [emulator]
-name    = "mame"
-driver  = "c64"
-runner  = "run.sh"
+# Canonical runner declarations live in runners.cmake — this section is
+# purely descriptive for humans and future tooling. picomos_run() reads
+# runners.cmake, not this file.
+supported = ["mame", "vice"]
+default   = "mame"
+
+[emulator.mame]
+driver         = "c64"
+requires_roms  = true
+notes          = "Needs Commodore's original BASIC/KERNAL/character ROMs in your MAME romset. Uses -quik for PRG loading plus a bundled lua plugin (runner-mame.lua) that pokes RUN into the keyboard buffer at $0277 — MAME's -autoboot_command does not fire the RUN keyword on the c64 driver."
+
+[emulator.vice]
+executable     = "x64sc"
+notes          = "Sketch runner; not verified end-to-end yet. VICE has its own ROM story."

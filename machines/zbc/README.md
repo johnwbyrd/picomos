@@ -19,9 +19,23 @@ running the picolibc test suite.
 
 ## Running programs
 
-```
-./run.sh path/to/program.elf
+Via a consumer CMake project:
+
+```cmake
+picomos_add_executable(hello MACHINE zbc SOURCES main.c)
+picomos_run(hello TIMEOUT 5)
 ```
 
-Uses `mame zbcm6502 -elfload <elf> -seconds_to_run 5`. All programs are
-expected to complete within 5 seconds of emulated wall time.
+Then `cmake --build build --target run-hello` invokes MAME on the built
+ELF. Override the MAME binary path with `PICOMOS_MAME=/path/to/mame`
+in the environment.
+
+Or invoke MAME directly:
+
+```sh
+mame zbcm6502 -window -skip_gameinfo \
+    -elfload path/to/program.elf -seconds_to_run 5
+```
+
+Runner metadata (executable name, argv template) lives in
+[runners.cmake](runners.cmake); no bash scripts.

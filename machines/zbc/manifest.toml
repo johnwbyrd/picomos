@@ -11,11 +11,12 @@ endianness   = "little"
 description = "63 KB RAM at 0x0000-0xFCDF, semihost device 0xFCE0-0xFCFF, vectors at 0xFFFA"
 
 [emulator]
-name    = "mame"
-driver  = "zbcm6502"
-runner  = "run.sh"
+# Canonical runner declarations live in runners.cmake — this section is
+# purely descriptive for humans and future tooling. picomos_run() reads
+# runners.cmake, not this file.
+supported = ["mame"]
+default   = "mame"
 
-[picolibc]
-# Path (relative to picomos root) or upstream ref.
-# Pinned to a known-good SHA/tag; the release workflow bumps this.
-ref     = "1.8.12"
+[emulator.mame]
+driver = "zbcm6502"
+notes  = "No external ROMs required; the zbcm6502 driver is a bare-metal 6502 with a MMIO semihost device at 0xFCE0."

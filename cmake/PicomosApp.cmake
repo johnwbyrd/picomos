@@ -1,22 +1,24 @@
-# Convenience helper for downstream CMake projects consuming an installed
-# picomos SDK. Expands to a plain mos-clang invocation with --config so it
-# is functionally identical to the "direct compiler" and "Makefile" user
-# workflows — no picomos-only behavior.
+# Convenience helpers for downstream CMake projects consuming an
+# installed picomos SDK. Two entry points:
 #
-# Usage in a downstream CMakeLists.txt:
+#   picomos_add_executable(hello MACHINE zbc SOURCES main.c)
+#       Wraps add_executable() with the right --config= flag. Also
+#       stamps the PICOMOS_MACHINE property on the target so
+#       picomos_run() can find it later.
 #
-#   find_package(Picomos REQUIRED)
-#   picomos_add_executable(hello
-#       MACHINE zbc
-#       SOURCES main.c)
+#   picomos_run(hello)
+#       Adds a custom target `run-hello` that launches the built
+#       binary under a machine-appropriate emulator. Cross-platform
+#       (no shell), reads each machine's runners.cmake, honours env
+#       overrides like PICOMOS_MAME=/path/to/mame.
 #
-# Under the hood this runs:
-#   mos-clang --config=<picomos>/share/picomos/configs/picomos-zbc.cfg \
-#             main.c -o hello.elf
-#
-# If a downstream user prefers `add_executable` and passes the config flag
-# themselves, that works too — this function is a convenience, not a
-# requirement.
+# Everything here is convenience — a downstream project can just
+# `add_executable` + append `--config=` manually, and invoke the
+# emulator by hand. See machines/<name>/README.md for raw command lines.
+
+# ---------------------------------------------------------------------
+# picomos_add_executable
+# ---------------------------------------------------------------------
 
 function(picomos_add_executable target)
     cmake_parse_arguments(PARSE_ARGV 1 A
@@ -38,5 +40,160 @@ function(picomos_add_executable target)
     add_executable(${target} ${A_SOURCES})
     target_compile_options(${target} PRIVATE "--config=${_cfg}")
     target_link_options(${target}    PRIVATE "--config=${_cfg}")
-    set_target_properties(${target} PROPERTIES SUFFIX ".elf")
+
+    # Peek at the machine's runners.cmake to learn the conventional
+    # output-file extension (e.g. .prg for c64, .elf for zbc). Machines
+    # set PICOMOS_MACHINE_SUFFIX as a top-level assignment.
+    # Including runners.cmake here also triggers picomos_register_runner
+    # calls; the resulting per-runner variables are scoped to this
+    # function frame and discarded on return — harmless.
+    set(PICOMOS_MACHINE_SUFFIX "")
+    include(
+        "${PICOMOS_ROOT}/mos-elf/usr/share/picomos/machines/${A_MACHINE}/runners.cmake"
+        OPTIONAL)
+
+    set_target_properties(${target} PROPERTIES
+        PICOMOS_MACHINE "${A_MACHINE}"
+        # Blank fallback avoids a Windows-hosted CMake tacking ".exe"
+        # onto a MOS binary. Machine's runners.cmake overrides.
+        SUFFIX "${PICOMOS_MACHINE_SUFFIX}")
+endfunction()
+
+# ---------------------------------------------------------------------
+# picomos_register_runner
+#
+# Called from machines/<name>/runners.cmake when picomos_run() includes
+# that file. Populates a set of per-runner variables in the CALLING
+# scope (picomos_run's frame), which picomos_run then reads back.
+# ---------------------------------------------------------------------
+
+function(picomos_register_runner)
+    cmake_parse_arguments(PARSE_ARGV 0 R
+        "DEFAULT"                                      # options
+        "NAME;EXECUTABLE;ENV_OVERRIDE;PLUGIN_SCRIPT"   # single-value
+        "ARGS")                                        # multi-value
+
+    if(NOT R_NAME OR NOT R_EXECUTABLE OR NOT R_ARGS)
+        message(FATAL_ERROR
+            "picomos_register_runner: NAME, EXECUTABLE, and ARGS required")
+    endif()
+
+    # Append to the runners list and stash per-runner data in the parent
+    # scope (the picomos_run function frame that included us).
+    list(APPEND _picomos_runner_names "${R_NAME}")
+    set(_picomos_runner_names "${_picomos_runner_names}" PARENT_SCOPE)
+
+    set(_picomos_runner_${R_NAME}_executable    "${R_EXECUTABLE}"    PARENT_SCOPE)
+    set(_picomos_runner_${R_NAME}_env_override  "${R_ENV_OVERRIDE}"  PARENT_SCOPE)
+    set(_picomos_runner_${R_NAME}_plugin_script "${R_PLUGIN_SCRIPT}" PARENT_SCOPE)
+    set(_picomos_runner_${R_NAME}_args          "${R_ARGS}"          PARENT_SCOPE)
+
+    if(R_DEFAULT AND NOT _picomos_runner_default)
+        set(_picomos_runner_default "${R_NAME}" PARENT_SCOPE)
+    endif()
+endfunction()
+
+# ---------------------------------------------------------------------
+# picomos_run(<target> [EMULATOR name] [TIMEOUT sec] [EXTRA_ARGS ...])
+#
+# Adds a `run-<target>` custom target that invokes the machine's
+# emulator on the built binary. Selects the runner from (in order):
+#   1. EMULATOR argument
+#   2. PICOMOS_EMULATOR environment variable
+#   3. the machine's DEFAULT runner from runners.cmake
+#   4. the first runner registered
+#
+# Executable path override per emulator via ENV_OVERRIDE (typically
+# PICOMOS_MAME, PICOMOS_VICE, ...), so users don't have to touch
+# runners.cmake to point at a locally-built emulator.
+# ---------------------------------------------------------------------
+
+function(picomos_run target)
+    cmake_parse_arguments(PARSE_ARGV 1 P
+        ""
+        "EMULATOR;TIMEOUT;MACHINE"
+        "EXTRA_ARGS")
+
+    # 1. Resolve machine — MACHINE arg wins, else target property, else fail.
+    if(NOT P_MACHINE)
+        get_target_property(P_MACHINE ${target} PICOMOS_MACHINE)
+    endif()
+    if(NOT P_MACHINE)
+        message(FATAL_ERROR
+            "picomos_run(${target}): cannot determine target machine. "
+            "Pass MACHINE, or create the target via picomos_add_executable.")
+    endif()
+
+    # 2. Load runners.cmake from the machine overlay. Populates
+    # _picomos_runner_names, _picomos_runner_default, and per-runner
+    # _picomos_runner_<name>_* variables in this function scope via
+    # picomos_register_runner's PARENT_SCOPE writes.
+    set(_picomos_runner_names "")
+    set(_picomos_runner_default "")
+    set(_machine_dir
+        "${PICOMOS_ROOT}/mos-elf/usr/share/picomos/machines/${P_MACHINE}")
+    set(_runners_file "${_machine_dir}/runners.cmake")
+    if(NOT EXISTS "${_runners_file}")
+        message(FATAL_ERROR
+            "picomos_run(${target}): no runners.cmake for machine "
+            "'${P_MACHINE}' (looked at ${_runners_file})")
+    endif()
+    include("${_runners_file}")
+
+    # 3. Pick a runner.
+    if(P_EMULATOR)
+        set(_chosen "${P_EMULATOR}")
+    elseif(DEFINED ENV{PICOMOS_EMULATOR})
+        set(_chosen "$ENV{PICOMOS_EMULATOR}")
+    elseif(_picomos_runner_default)
+        set(_chosen "${_picomos_runner_default}")
+    elseif(_picomos_runner_names)
+        list(GET _picomos_runner_names 0 _chosen)
+    else()
+        message(FATAL_ERROR
+            "picomos_run(${target}): runners.cmake for '${P_MACHINE}' "
+            "registered no runners.")
+    endif()
+
+    if(NOT "${_chosen}" IN_LIST _picomos_runner_names)
+        message(FATAL_ERROR
+            "picomos_run(${target}): emulator '${_chosen}' not registered "
+            "for machine '${P_MACHINE}'. Available: ${_picomos_runner_names}")
+    endif()
+
+    # 4. Resolve executable (env override wins over runners.cmake default).
+    set(_env "${_picomos_runner_${_chosen}_env_override}")
+    if(_env AND DEFINED ENV{${_env}})
+        set(_exe "$ENV{${_env}}")
+    else()
+        set(_exe "${_picomos_runner_${_chosen}_executable}")
+    endif()
+
+    # 5. Substitute {PROGRAM} / {TIMEOUT} / {PLUGIN_SCRIPT} in argv.
+    if(NOT P_TIMEOUT)
+        set(P_TIMEOUT 30)
+    endif()
+    set(_plugin_script "")
+    if(_picomos_runner_${_chosen}_plugin_script)
+        set(_plugin_script
+            "${_machine_dir}/${_picomos_runner_${_chosen}_plugin_script}")
+    endif()
+
+    set(_argv "")
+    foreach(_arg IN LISTS _picomos_runner_${_chosen}_args)
+        string(REPLACE "{TIMEOUT}"       "${P_TIMEOUT}"       _arg "${_arg}")
+        string(REPLACE "{PLUGIN_SCRIPT}" "${_plugin_script}"  _arg "${_arg}")
+        # {PROGRAM} is a generator expression resolved at build time,
+        # so the target need not exist yet.
+        string(REPLACE "{PROGRAM}" "$<TARGET_FILE:${target}>" _arg "${_arg}")
+        list(APPEND _argv "${_arg}")
+    endforeach()
+
+    # 6. Custom build target — `cmake --build build --target run-<target>`.
+    add_custom_target(run-${target}
+        COMMAND ${_exe} ${_argv} ${P_EXTRA_ARGS}
+        DEPENDS ${target}
+        VERBATIM
+        USES_TERMINAL
+        COMMENT "picomos: running ${target} on machine ${P_MACHINE} under ${_chosen}")
 endfunction()

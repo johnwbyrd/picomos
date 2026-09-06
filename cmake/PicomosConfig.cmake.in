@@ -32,6 +32,12 @@ find_program(PICOMOS_MOS_CLANG mos-clang
     HINTS "${PICOMOS_ROOT}/bin"
     DOC   "llvm-mos clang driver bundled with picomos")
 
+# Toolchain file for consumer projects: pass via
+#   cmake -DCMAKE_TOOLCHAIN_FILE=${PICOMOS_TOOLCHAIN_FILE}
+# BEFORE find_package(Picomos), so CMake's compiler probing uses
+# mos-clang rather than the host cc.
+set(PICOMOS_TOOLCHAIN_FILE "${_this_dir}/mos-toolchain.cmake")
+
 include("${_this_dir}/PicomosApp.cmake")
 
 check_required_components(Picomos)
