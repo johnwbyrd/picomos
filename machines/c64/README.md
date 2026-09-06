@@ -47,8 +47,28 @@ required at build or run time.
 
 ## Running
 
+Via a consumer CMake project (see [`examples/c64/hello`](../../examples/c64/hello/)):
+
+```cmake
+picomos_add_executable(hello MACHINE c64 SOURCES main.c)
+picomos_run(hello TIMEOUT 10)
+```
+
+`cmake --build build --target run-hello` invokes MAME on the built PRG.
+The bundled [runner-mame.lua](runner-mame.lua) plugin auto-types RUN
+into the C64 keyboard buffer after boot, so the program starts without
+user intervention.
+
+Or invoke MAME directly:
+
 ```sh
 mos-clang --config=$PICOMOS/share/picomos/configs/picomos-c64.cfg \
           main.c -o hello.prg
-$PICOMOS/mos-elf/usr/share/picomos/machines/c64/run.sh hello.prg
+mame c64 -window -skip_gameinfo -quik hello.prg \
+    -plugins -autoboot_script \
+    $PICOMOS/mos-elf/usr/share/picomos/machines/c64/runner-mame.lua \
+    -seconds_to_run 10
 ```
+
+Runner metadata (executable name, argv template, plugin script) lives
+in [runners.cmake](runners.cmake); no bash scripts.

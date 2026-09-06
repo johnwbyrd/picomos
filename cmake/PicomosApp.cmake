@@ -94,6 +94,121 @@ function(picomos_register_runner)
 endfunction()
 
 # ---------------------------------------------------------------------
+# picomos_add_test(<target>
+#     EXPECT       "regex to grep for in the emulator's stdout"
+#   | EXPECT_FILE  path/to/golden-text-file
+#     [EMULATOR name]
+#     [TIMEOUT sec]
+#     [EXTRA_ARGS ...])
+#
+# Adds a CTest entry that runs the target under an emulator (via the
+# same machine `runners.cmake` machinery as picomos_run) and passes iff
+# the captured stdout contains the EXPECT pattern.
+#
+# What "stdout" means depends on the machine. picomos's convention is
+# that runner-*.lua streams each byte emitted through the machine's
+# canonical output primitive (CHROUT on c64, KERNAL BSOUT elsewhere,
+# semihost sys_write on zbc, ...) to the emulator subprocess's stdout.
+# CTest greps that stream for the pattern — no screen-scraping, no
+# extension per machine at this layer.
+# ---------------------------------------------------------------------
+
+function(picomos_add_test target)
+    cmake_parse_arguments(PARSE_ARGV 1 T
+        ""
+        "EXPECT;EXPECT_FILE;EMULATOR;TIMEOUT;MACHINE"
+        "EXTRA_ARGS")
+
+    if(NOT T_EXPECT AND NOT T_EXPECT_FILE)
+        message(FATAL_ERROR
+            "picomos_add_test(${target}): pass EXPECT or EXPECT_FILE")
+    endif()
+    if(T_EXPECT AND T_EXPECT_FILE)
+        message(FATAL_ERROR
+            "picomos_add_test(${target}): EXPECT and EXPECT_FILE are exclusive")
+    endif()
+
+    # Resolve the machine — MACHINE arg wins, else the target's
+    # PICOMOS_MACHINE property (set by picomos_add_executable).
+    if(NOT T_MACHINE)
+        get_target_property(T_MACHINE ${target} PICOMOS_MACHINE)
+    endif()
+    if(NOT T_MACHINE)
+        message(FATAL_ERROR
+            "picomos_add_test(${target}): no MACHINE and target has no "
+            "PICOMOS_MACHINE property — was it built with picomos_add_executable?")
+    endif()
+
+    if(NOT T_TIMEOUT)
+        set(T_TIMEOUT 15)
+    endif()
+
+    # Read runners.cmake to pick the emulator + build its argv, exactly
+    # as picomos_run() does.
+    set(_picomos_runner_names "")
+    set(_picomos_runner_default "")
+    set(_machine_dir
+        "${PICOMOS_ROOT}/mos-elf/usr/share/picomos/machines/${T_MACHINE}")
+    include("${_machine_dir}/runners.cmake" OPTIONAL)
+
+    if(T_EMULATOR)
+        set(_chosen "${T_EMULATOR}")
+    elseif(DEFINED ENV{PICOMOS_EMULATOR})
+        set(_chosen "$ENV{PICOMOS_EMULATOR}")
+    elseif(_picomos_runner_default)
+        set(_chosen "${_picomos_runner_default}")
+    elseif(_picomos_runner_names)
+        list(GET _picomos_runner_names 0 _chosen)
+    else()
+        message(FATAL_ERROR
+            "picomos_add_test(${target}): no runners registered for machine "
+            "'${T_MACHINE}'")
+    endif()
+
+    set(_env "${_picomos_runner_${_chosen}_env_override}")
+    if(_env AND DEFINED ENV{${_env}})
+        set(_exe "$ENV{${_env}}")
+    else()
+        set(_exe "${_picomos_runner_${_chosen}_executable}")
+    endif()
+
+    set(_plugin_script "")
+    if(_picomos_runner_${_chosen}_plugin_script)
+        set(_plugin_script
+            "${_machine_dir}/${_picomos_runner_${_chosen}_plugin_script}")
+    endif()
+
+    set(_argv "")
+    foreach(_arg IN LISTS _picomos_runner_${_chosen}_args)
+        string(REPLACE "{TIMEOUT}"       "${T_TIMEOUT}"       _arg "${_arg}")
+        string(REPLACE "{PLUGIN_SCRIPT}" "${_plugin_script}"  _arg "${_arg}")
+        string(REPLACE "{PROGRAM}" "$<TARGET_FILE:${target}>" _arg "${_arg}")
+        list(APPEND _argv "${_arg}")
+    endforeach()
+
+    # Compose the expected pattern. EXPECT_FILE is read at configure
+    # time — small files only. Escape regex metacharacters unless the
+    # user opts into a raw regex via CMake's own $<> escapes (not
+    # supported here yet — keep it plain-text for now).
+    if(T_EXPECT_FILE)
+        file(READ "${T_EXPECT_FILE}" _pattern)
+    else()
+        set(_pattern "${T_EXPECT}")
+    endif()
+
+    # CTest kills the process after `TIMEOUT` seconds wall-clock. Pad
+    # a few seconds over the emulator's own -seconds_to_run so that
+    # MAME shuts down cleanly rather than being SIGKILLed.
+    math(EXPR _ctest_timeout "${T_TIMEOUT} + 10")
+
+    add_test(NAME ${target}
+        COMMAND ${_exe} ${_argv} ${T_EXTRA_ARGS})
+    set_tests_properties(${target} PROPERTIES
+        PASS_REGULAR_EXPRESSION "${_pattern}"
+        TIMEOUT "${_ctest_timeout}")
+endfunction()
+
+# ---------------------------------------------------------------------
 # picomos_run(<target> [EMULATOR name] [TIMEOUT sec] [EXTRA_ARGS ...])
 #
 # Adds a `run-<target>` custom target that invokes the machine's

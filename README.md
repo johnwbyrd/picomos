@@ -54,14 +54,19 @@ EOF
 mos-clang --config=$PICOMOS/share/picomos/configs/picomos-zbc.cfg \
           hello.c -o hello.elf
 
-# 4. Run under the machine's emulator
-$PICOMOS/mos-elf/usr/share/picomos/machines/zbc/run.sh hello.elf
+# 4. Run under the machine's emulator (MAME must be installed separately)
+mame zbcm6502 -window -skip_gameinfo \
+    -elfload hello.elf -seconds_to_run 5
 ```
 
 For zbc, output arrives on the host's stdout via the ZBC semihost device.
-For c64, the output shows in the MAME window — the c64's `run.sh` uses
-MAME's `-quik` to load your PRG; type `RUN` and press Enter in the emulator
-to start it. (Automating that is on the list.)
+For c64, output shows in the MAME window — see [machines/c64/README.md](machines/c64/README.md)
+for the exact MAME command (uses `-quik` plus a bundled lua plugin that
+auto-types RUN once the KERNAL reaches READY).
+
+If you're using CMake, the [CMake workflow](#cmake) below gives you a
+`run-hello` build target that invokes MAME for you — no bash script, no
+hand-typed emulator flags.
 
 ## What's in the SDK
 
@@ -77,13 +82,15 @@ picomos-X.Y.Z-<host>/
 │       ├── lib/               picolibc libc.a, libm.a, crt0 variants
 │       └── share/picomos/
 │           └── machines/      per-machine overlay
-│               ├── zbc/       link.ld, run.sh
-│               └── c64/       link.ld, crt0.o, libio.a, run.sh
+│               ├── zbc/       link.ld, runners.cmake, manifest.toml
+│               └── c64/       link.ld, crt0.o, libio.a, runners.cmake,
+│                              runner-mame.lua, manifest.toml
 └── share/picomos/
     ├── configs/               clang config files (--config= consumes)
     │   ├── picomos-zbc.cfg
     │   └── picomos-c64.cfg
-    ├── cmake/                 PicomosConfig.cmake for find_package()
+    ├── cmake/                 PicomosConfig.cmake + mos-toolchain.cmake
+    │                          for find_package(Picomos) / cross-compile
     └── examples/              copyable example projects (zbc/hello, c64/hello)
 ```
 
@@ -119,18 +126,36 @@ find_package(Picomos REQUIRED)
 picomos_add_executable(hello
     MACHINE c64            # or zbc
     SOURCES main.c)
+
+# Optional: adds a `run-hello` target that launches MAME on the built
+# binary. Cross-platform (pure CMake, no shell script). Override the
+# emulator binary via the PICOMOS_MAME environment variable.
+picomos_run(hello TIMEOUT 10)
+
+# Automated check: `ctest` runs the same emulator invocation and
+# passes if "hello, mos" appears in the captured output stream.
+# Under c64, that stream is CHROUT bytes intercepted via a memory
+# tap on $FFD2; under zbc, it's the semihost writes MAME's zbcm6502
+# driver already routes to stdout. Either way, one API.
+enable_testing()
+picomos_add_test(hello EXPECT "hello, mos" TIMEOUT 10)
 ```
 
-Configure with:
+Configure with picomos's own toolchain file so CMake probes with
+`mos-clang` instead of the host cc:
 
 ```sh
-cmake -B build -G Ninja -DPicomos_DIR=$PICOMOS/share/picomos/cmake
-cmake --build build
+cmake -B build -G Ninja \
+    -DCMAKE_TOOLCHAIN_FILE=$PICOMOS/share/picomos/cmake/mos-toolchain.cmake \
+    -DPicomos_DIR=$PICOMOS/share/picomos/cmake
+cmake --build build                       # builds hello.prg (or hello.elf)
+cmake --build build --target run-hello    # launches MAME on it
 ```
 
 `picomos_add_executable` expands to the same `--config=picomos-<machine>.cfg`
 invocation as the direct-compiler workflow — the CMake path is purely
-ergonomic (dependency tracking, cross-platform globs, subdirectory targets).
+ergonomic (dependency tracking, cross-platform, and `run-hello` targets
+without touching a shell).
 
 Complete copyable projects live under `share/picomos/examples/`.
 
@@ -147,7 +172,13 @@ The SDK does **not** bundle MAME — install it separately (`apt install mame`,
   exact filenames it looked for if any are missing. Output appears on the
   emulated C64 screen (not the host terminal).
 
-Override the MAME binary with `MAME=/path/to/mame` when calling `run.sh`.
+Override the MAME binary with the `PICOMOS_MAME` environment variable
+when using the CMake `picomos_run` target, or invoke MAME directly with
+its full path if you prefer. Which emulator each machine supports is
+declared in [`machines/<name>/runners.cmake`](machines/); the design
+allows plural emulators per machine (`picomos_run(hello EMULATOR vice)`
+is intended to work once vice runners land — currently only MAME is
+verified).
 
 ## How it fits together
 
