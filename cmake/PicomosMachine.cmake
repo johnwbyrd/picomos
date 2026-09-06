@@ -28,7 +28,7 @@ function(picomos_machine machine_name)
     cmake_parse_arguments(PARSE_ARGV 1 M
         ""
         ""
-        "CRT_SOURCES;IO_SOURCES;LINKER_PARTS;DEFINES")
+        "CRT_SOURCES;IO_SOURCES;LINKER_PARTS;DEFINES;LINK_LIBS")
 
     # If llvm-mos is being built from source in this run, custom
     # commands that invoke mos-clang must wait for it.
@@ -56,18 +56,16 @@ function(picomos_machine machine_name)
         install(FILES "${_link_ld}" DESTINATION "${_dest}")
 
         # llvm-mos's clang driver unconditionally appends `-Tlink.ld` to
-        # every link, resolved via the sysroot's -L paths. Install a copy
-        # of this machine's link.ld at mos-elf/usr/lib/link.ld so that
-        # driver-added -T finds it, and let the picomos-<machine>.cfg
-        # config file skip its own explicit -T (avoids duplicate-INCLUDE
-        # errors from having the same script pulled in twice).
+        # every link, resolved via -L search paths. The per-machine
+        # config file lists `-L<machine-overlay-dir>` BEFORE `-L.../usr/lib`
+        # so the driver's -Tlink.ld picks up THIS machine's script — no
+        # explicit -T needed in the config, and no duplicate-script
+        # conflict from ld.lld processing multiple -T args.
         #
-        # TODO(multi-machine): mos-elf/usr/lib/ is shared across all
-        # machines in a single SDK bundle. Today with only zbc this works;
-        # once a second machine lands, we need per-machine sysroots or a
-        # config-file mechanism that overrides the driver's -Tlink.ld.
-        install(FILES "${_link_ld}"
-                DESTINATION "${PICOMOS_SYSROOT_RELATIVE}/usr/lib")
+        # This is what makes multi-machine SDK bundles work: each machine
+        # ships its own link.ld under its own subdir, and machine
+        # selection is entirely a matter of which config file (i.e.
+        # which -L search path) the user picks.
     endif()
 
     # --- crt0.o --------------------------------------------------------
@@ -88,6 +86,7 @@ function(picomos_machine machine_name)
             OUTPUT "${_crt0_o}"
             COMMAND "${PICOMOS_MOS_CLANG}"
                     -nostdlib -Oz -flto
+                    -D__IEEE_LITTLE_ENDIAN -D_LDBL_EQ_DBL
                     -isystem "${PICOMOS_PICOLIBC_STAGING}/usr/include"
                     ${_crt_defs}
                     -r -o "${_crt0_o}"
@@ -115,6 +114,7 @@ function(picomos_machine machine_name)
                 OUTPUT "${_obj}"
                 COMMAND "${PICOMOS_MOS_CLANG}"
                         -nostdlib -Oz -flto
+                        -D__IEEE_LITTLE_ENDIAN -D_LDBL_EQ_DBL
                         -isystem "${PICOMOS_PICOLIBC_STAGING}/usr/include"
                         -c -o "${_obj}" "${_src}"
                 DEPENDS "${_src}" picolibc-mos ${_machine_extra_deps}
@@ -142,5 +142,6 @@ function(picomos_machine machine_name)
     picomos_write_config(${machine_name}
         HAS_LINK "${M_LINKER_PARTS}"
         HAS_CRT0 "${M_CRT_SOURCES}"
-        HAS_IO   "${M_IO_SOURCES}")
+        HAS_IO   "${M_IO_SOURCES}"
+        LINK_LIBS "${M_LINK_LIBS}")
 endfunction()

@@ -1,0 +1,20 @@
+# C64 (Commodore 64) — MAME's c64 driver.
+#
+# Programs are packaged as .PRG (BASIC-compatible load format) and
+# quickloaded into RAM at $0801 with a BASIC "SYS 20xx" stub that
+# jumps to _start. Standard C64 memory: BASIC + KERNAL ROMs stay
+# mapped, so puts/printf can route through the KERNAL's CHROUT
+# routine at $FFD2.
+
+name         = "c64"
+display_name = "Commodore 64 (MAME c64)"
+cpu          = "6502"
+endianness   = "little"
+
+[memory]
+description = "0x0800 stack/system, 0x0801-0x9FFF free RAM (BASIC area), BASIC ROM 0xA000-0xBFFF, KERNAL 0xE000-0xFFFF, I/O at 0xD000-0xDFFF"
+
+[emulator]
+name    = "mame"
+driver  = "c64"
+runner  = "run.sh"

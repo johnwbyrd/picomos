@@ -16,7 +16,7 @@
 
 function(picomos_write_config machine_name)
     cmake_parse_arguments(PARSE_ARGV 1 CFG
-        "" "HAS_LINK;HAS_CRT0;HAS_IO" "")
+        "" "HAS_LINK;HAS_CRT0;HAS_IO" "LINK_LIBS")
 
     # Staged path (build-tree consumers) and installed path (final SDK).
     set(_staged_cfg  "${CMAKE_BINARY_DIR}/staging/share/picomos/configs/picomos-${machine_name}.cfg")
@@ -43,6 +43,14 @@ function(picomos_write_config machine_name)
     list(APPEND _lines "")
     list(APPEND _lines "--sysroot=<CFGDIR>/${_sysroot_rel}")
     list(APPEND _lines "-isystem <CFGDIR>/${_sysroot_rel}/usr/include")
+
+    # Machine overlay `-L` comes FIRST so llvm-mos's clang driver, which
+    # unconditionally appends `-Tlink.ld` to every link, resolves that
+    # to THIS machine's link.ld (multi-machine safe — each machine
+    # ships its own script under its own subdir). Emitting an explicit
+    # -T here would cause a duplicate INCLUDE and "region already
+    # defined" errors.
+    list(APPEND _lines "-L<CFGDIR>/${_machine_rel}")
     list(APPEND _lines "-L<CFGDIR>/${_sysroot_rel}/usr/lib")
     list(APPEND _lines "")
     list(APPEND _lines "# Bypass llvm-mos's built-in platform defaults (libcrt, link.ld) —")
@@ -50,26 +58,18 @@ function(picomos_write_config machine_name)
     list(APPEND _lines "-nostdlib")
     list(APPEND _lines "")
     if(CFG_HAS_CRT0)
-        list(APPEND _lines "# Machine startup")
+        list(APPEND _lines "# Machine startup / auxiliary link inputs")
         list(APPEND _lines "<CFGDIR>/${_machine_rel}/crt0.o")
     endif()
-    if(CFG_HAS_LINK)
-        # No explicit -T here: llvm-mos's clang driver auto-appends
-        # `-Tlink.ld` to every link, resolved via the sysroot's -L path.
-        # PicomosMachine.cmake installs the machine's link.ld to
-        # mos-elf/usr/lib/link.ld so that driver-added -T resolves.
-        # Emitting a second -T would cause ld.lld to include the same
-        # script twice, producing "region 'flash' already defined" errors.
-        list(APPEND _lines "# Machine linker script is picked up by the")
-        list(APPEND _lines "# driver-added -Tlink.ld via -L .../mos-elf/usr/lib.")
-    endif()
     list(APPEND _lines "")
-    list(APPEND _lines "# Libraries: picolibc + its semihost backend + machine I/O overlay.")
-    list(APPEND _lines "# Order matters: -lc first, then -lsemihost so picolibc calls resolve.")
+    list(APPEND _lines "# picolibc is always present. The picolibc-provided crt0 archive")
+    list(APPEND _lines "# (libcrt0-*.a) and any machine-specific libraries are pulled in")
+    list(APPEND _lines "# via GROUP() inside the machine's linker script or via LINK_LIBS below.")
     list(APPEND _lines "-lc")
-    list(APPEND _lines "-lsemihost")
+    foreach(_lib IN LISTS CFG_LINK_LIBS)
+        list(APPEND _lines "${_lib}")
+    endforeach()
     if(CFG_HAS_IO)
-        list(APPEND _lines "-L<CFGDIR>/${_machine_rel}")
         list(APPEND _lines "-lio")
     endif()
 

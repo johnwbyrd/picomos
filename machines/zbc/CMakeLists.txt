@@ -13,4 +13,10 @@ picomos_machine(zbc
     LINKER_PARTS
         linker/memory.ld
         linker/sections.ld
+    LINK_LIBS
+        # ZBC routes stdio through picolibc's semihost library: puts →
+        # sys_write → libsemihost's ZBC RIFF client → MMIO device
+        # at 0xFCE0. libsemihost also provides `exit` and the POSIX
+        # stdout FILE that picolibc's crt0-semihost-zbc expects.
+        -lsemihost
 )

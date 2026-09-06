@@ -34,7 +34,7 @@ picolibc has no MOS arch yet.")
 set(PICOMOS_PICOLIBC_REF "feature/upstream-rebase-2026-09" CACHE STRING
     "picolibc git tag/branch/SHA to fetch when PICOMOS_PICOLIBC_SOURCE is empty.")
 
-set(PICOMOS_MACHINES "zbc" CACHE STRING
+set(PICOMOS_MACHINES "zbc;c64" CACHE STRING
     "Semicolon-separated list of machines to build (subdirs of machines/).")
 
 option(PICOMOS_INSTALL_TOOLCHAIN
