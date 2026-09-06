@@ -23,7 +23,11 @@ env:
   # Pin the source refs we ship. Reproducible-from-source is the point;
   # build takes ~40-60 min on Job A but only runs on tags.
   LLVM_MOS_REF:       'main'        # TODO: pin to a specific SHA per release
-  PICOLIBC_VERSION:   '1.8.12'
+  # Fetched from PICOMOS_PICOLIBC_REPOSITORY (defaults to
+  # johnwbyrd/picolibc, the picomos-maintained fork with MOS support —
+  # upstream picolibc has no MOS arch yet). Branch, not tag; the fork
+  # rebases onto upstream periodically and re-tags this branch name.
+  PICOLIBC_VERSION:   'feature/upstream-rebase-2026-09'
 
 jobs:
 
