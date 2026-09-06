@@ -99,30 +99,24 @@ jobs:
           cmake -B build -G Ninja \
             -DPICOMOS_LLVM_MOS_REF=${{ env.LLVM_MOS_REF }} \
             -DPICOMOS_PICOLIBC_PREBUILT=$PWD/prebuilt/picolibc-mos.tar.xz \
-            -DPICOMOS_MACHINES="zbc" \
+            -DPICOMOS_MACHINES="zbc;c64" \
             -DPICOMOS_INSTALL_TOOLCHAIN=ON \
-            -DCMAKE_INSTALL_PREFIX=$PWD/dist/picomos-${{ matrix.host }}
+            -DPICOMOS_HOST_LABEL=${{ matrix.host }}
 
       - name: Build machine overlays + config files
         run: cmake --build build
 
-      - name: Install into the SDK layout
-        run: cmake --install build
-
-      - name: Package
-        shell: bash
-        run: |
-          cd dist
-          if [ "${{ matrix.archive }}" = "zip" ]; then
-            7z a picomos-${{ matrix.host }}.zip picomos-${{ matrix.host }}/
-          else
-            tar -cJf picomos-${{ matrix.host }}.tar.xz picomos-${{ matrix.host }}
-          fi
+      # CPack runs its own cmake --install into a staging dir, then
+      # compresses to TXZ (Linux/macOS) or ZIP (Windows) per the
+      # generator selected in the top-level CMakeLists.txt based on
+      # CMAKE_HOST_SYSTEM_NAME. Archive lands at build/picomos-*.<ext>.
+      - name: Package (cpack)
+        run: cmake --build build --target package
 
       - uses: actions/upload-artifact@v4
         with:
           name: picomos-${{ matrix.host }}
-          path: dist/picomos-${{ matrix.host }}.${{ matrix.archive }}
+          path: build/picomos-*.${{ matrix.archive }}
 
   # ----------------------------------------------------------------- release
   release:

@@ -89,3 +89,67 @@ endif()
 install(DIRECTORY examples/ DESTINATION share/picomos/examples
         PATTERN "build" EXCLUDE
         PATTERN ".git*" EXCLUDE)
+
+# --- Packaging via CPack --------------------------------------------------
+# `cmake --build build --target package` produces a single archive of
+# everything cmake --install would place under the prefix:
+#
+#   Linux/macOS -> picomos-<version>-<host>.tar.xz  (CPack TXZ generator)
+#   Windows     -> picomos-<version>-<host>.zip     (CPack ZIP generator)
+#
+# The archive is genuinely batteries-included IFF -DPICOMOS_INSTALL_TOOLCHAIN=ON
+# was passed at configure time (otherwise bin/ is empty and users would still
+# need llvm-mos on PATH). Both generators are libarchive-backed and work on
+# every host — Windows tar.xz support is limited enough that we ship .zip
+# there instead of forcing users onto 7-Zip.
+
+set(PICOMOS_VERSION "0.1.0"
+    CACHE STRING "Version stamp embedded in the release archive filename.")
+
+set(PICOMOS_HOST_LABEL "" CACHE STRING
+    "Explicit host label for the release archive filename (e.g. \
+'linux-x86_64', 'macos-arm64', 'windows-x86_64'). Overrides auto-detection \
+from CMAKE_HOST_SYSTEM_NAME / _PROCESSOR — CI passes this so bundles are \
+named identically across runners regardless of local naming quirks like \
+Windows's AMD64 vs x86_64.")
+
+set(CPACK_PACKAGE_NAME              "picomos")
+set(CPACK_PACKAGE_VERSION           "${PICOMOS_VERSION}")
+set(CPACK_PACKAGE_VENDOR            "picomos")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY
+    "Batteries-included cross-development SDK for MOS 6502-family targets")
+
+# Host label mirrors the release workflow's matrix.host: linux-x86_64,
+# macos-arm64, windows-x86_64, etc.
+if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux")
+    set(CPACK_GENERATOR "TXZ")
+    set(_picomos_host_os "linux")
+elseif(CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin")
+    set(CPACK_GENERATOR "TXZ")
+    set(_picomos_host_os "macos")
+elseif(CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
+    set(CPACK_GENERATOR "ZIP")
+    set(_picomos_host_os "windows")
+else()
+    set(CPACK_GENERATOR "TXZ")
+    set(_picomos_host_os "${CMAKE_HOST_SYSTEM_NAME}")
+    string(TOLOWER "${_picomos_host_os}" _picomos_host_os)
+endif()
+string(TOLOWER "${CMAKE_HOST_SYSTEM_PROCESSOR}" _picomos_host_arch)
+if(PICOMOS_HOST_LABEL)
+    set(CPACK_PACKAGE_FILE_NAME
+        "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}-${PICOMOS_HOST_LABEL}")
+else()
+    set(CPACK_PACKAGE_FILE_NAME
+        "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}-${_picomos_host_os}-${_picomos_host_arch}")
+endif()
+
+# CPack's default install-inside-archive path prefixes every file with
+# a versioned dir — good, so `tar xf picomos-*.tar.xz` unpacks into a
+# single self-contained top-level directory.
+set(CPACK_PACKAGE_INSTALL_DIRECTORY "picomos-${CPACK_PACKAGE_VERSION}")
+
+# Skip CPack's boilerplate license/README prompts.
+set(CPACK_MONOLITHIC_INSTALL ON)
+
+include(CPack)
