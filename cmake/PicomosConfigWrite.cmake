@@ -54,8 +54,14 @@ function(picomos_write_config machine_name)
         list(APPEND _lines "<CFGDIR>/${_machine_rel}/crt0.o")
     endif()
     if(CFG_HAS_LINK)
-        list(APPEND _lines "# Machine linker script")
-        list(APPEND _lines "-T<CFGDIR>/${_machine_rel}/link.ld")
+        # No explicit -T here: llvm-mos's clang driver auto-appends
+        # `-Tlink.ld` to every link, resolved via the sysroot's -L path.
+        # PicomosMachine.cmake installs the machine's link.ld to
+        # mos-elf/usr/lib/link.ld so that driver-added -T resolves.
+        # Emitting a second -T would cause ld.lld to include the same
+        # script twice, producing "region 'flash' already defined" errors.
+        list(APPEND _lines "# Machine linker script is picked up by the")
+        list(APPEND _lines "# driver-added -Tlink.ld via -L .../mos-elf/usr/lib.")
     endif()
     list(APPEND _lines "")
     list(APPEND _lines "# Libraries: picolibc + its semihost backend + machine I/O overlay.")

@@ -54,6 +54,20 @@ function(picomos_machine machine_name)
             COMMENT "picomos[${machine_name}]: assembling link.ld")
         add_custom_target(${machine_name}-link ALL DEPENDS "${_link_ld}")
         install(FILES "${_link_ld}" DESTINATION "${_dest}")
+
+        # llvm-mos's clang driver unconditionally appends `-Tlink.ld` to
+        # every link, resolved via the sysroot's -L paths. Install a copy
+        # of this machine's link.ld at mos-elf/usr/lib/link.ld so that
+        # driver-added -T finds it, and let the picomos-<machine>.cfg
+        # config file skip its own explicit -T (avoids duplicate-INCLUDE
+        # errors from having the same script pulled in twice).
+        #
+        # TODO(multi-machine): mos-elf/usr/lib/ is shared across all
+        # machines in a single SDK bundle. Today with only zbc this works;
+        # once a second machine lands, we need per-machine sysroots or a
+        # config-file mechanism that overrides the driver's -Tlink.ld.
+        install(FILES "${_link_ld}"
+                DESTINATION "${PICOMOS_SYSROOT_RELATIVE}/usr/lib")
     endif()
 
     # --- crt0.o --------------------------------------------------------
