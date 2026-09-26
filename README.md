@@ -14,10 +14,12 @@ mos-clang --config=$PICOMOS/share/picomos/configs/picomos-c64.cfg \
 No picomos-specific tools. No shell wrappers around clang. Nothing on your
 PATH except what you extracted from the tarball.
 
-> **Status: pre-release.** No downloadable tarballs are published yet. The
-> release workflow that produces them lives in
-> [.github/workflows/release.yml](.github/workflows/release.yml); until the
-> first release lands, [build one yourself](#building-the-sdk-yourself).
+> **Status: pre-release.** No versioned tag has been cut yet, but every
+> push to `main` produces a rolling `nightly` bundle for each host —
+> pull it from
+> [github.com/johnwbyrd/picomos/releases/tag/nightly](https://github.com/johnwbyrd/picomos/releases/tag/nightly)
+> (or use the direct URLs in [Quick start](#quick-start) below). Contents
+> change on every push; the URLs stay the same.
 
 ## Supported hosts and targets
 
@@ -38,10 +40,12 @@ machines — one download builds for every machine picomos supports.
 ## Quick start
 
 ```sh
-# 1. Download and extract the bundle for your host
-curl -LO https://github.com/johnwbyrd/picomos/releases/download/vX.Y.Z/picomos-X.Y.Z-linux-x86_64.tar.xz
-tar xf picomos-X.Y.Z-linux-x86_64.tar.xz
-export PICOMOS=$PWD/picomos-X.Y.Z-linux-x86_64
+# 1. Download and extract the current nightly bundle for your host
+#    (macOS: swap in picomos-nightly-macos-arm64.tar.xz;
+#     Windows: picomos-nightly-windows-x86_64.zip)
+curl -LO https://github.com/johnwbyrd/picomos/releases/download/nightly/picomos-nightly-linux-x86_64.tar.xz
+tar xf picomos-nightly-linux-x86_64.tar.xz
+export PICOMOS=$PWD/picomos-nightly-linux-x86_64
 export PATH=$PICOMOS/bin:$PATH
 
 # 2. Write hello world
