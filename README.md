@@ -182,7 +182,11 @@ picomos-X.Y.Z-<host>/
     │   └── picomos-c64.cfg
     ├── cmake/                 PicomosConfig.cmake + mos-toolchain.cmake
     │                          for find_package(Picomos) / cross-compile
-    └── examples/              copyable example projects (zbc/hello, c64/hello)
+    └── examples/              copyable example projects
+        ├── programs/          portable (fanned out across every machine)
+        │   ├── hello/         minimal puts()
+        │   └── malloc_free/   picolibc malloc + free
+        └── <machine>/         per-machine (target-only demos)
 ```
 
 Every path in the `.cfg` files is relative to the config file's location

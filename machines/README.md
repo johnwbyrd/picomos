@@ -40,9 +40,15 @@ everything else is referenced from there.
 5. Provide `io/*.c` if your machine talks to the outside world through
    something other than the default (semihost, none, etc.).
 6. Provide `run.sh` that launches your emulator with the given ELF.
-7. Add an example under `examples/<your-machine>/hello/` that builds and
-   runs.
+7. No per-machine hello is required — the portable
+   [`examples/programs/hello/`](../examples/programs/hello/) fans out
+   over every machine the SDK ships (via `PICOMOS_MACHINES` in
+   `PicomosConfig.cmake`). Add a machine-specific demo under
+   [`examples/machines/<your-machine>/`](../examples/machines/) only
+   if it needs something a portable `puts()` can't express (raster
+   interrupts, mapper tricks, semihost-specific behavior).
 8. Open a PR.
 
-CI will link the hello example against the shared picolibc + your machine
-overlay and run it under your emulator on every push.
+CI links the portable examples against the shared picolibc + your machine
+overlay and runs them under your emulator on every push — no per-machine
+example needed for hello-world coverage.

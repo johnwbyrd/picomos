@@ -47,14 +47,16 @@ required at build or run time.
 
 ## Running
 
-Via a consumer CMake project (see [`examples/c64/hello`](../../examples/c64/hello/)):
+Via a consumer CMake project (see the portable
+[`examples/programs/hello`](../../examples/programs/hello/), which fans
+out over every machine including c64):
 
 ```cmake
-picomos_add_executable(hello MACHINE c64 SOURCES main.c)
-picomos_run(hello TIMEOUT 10)
+picomos_add_executable(hello-c64 MACHINE c64 SOURCES main.c)
+picomos_run(hello-c64 TIMEOUT 10)
 ```
 
-`cmake --build build --target run-hello` invokes MAME on the built PRG.
+`cmake --build build --target run-hello-c64` invokes MAME on the built PRG.
 The bundled [runner-mame.lua](runner-mame.lua) plugin auto-types RUN
 into the C64 keyboard buffer after boot, so the program starts without
 user intervention.
