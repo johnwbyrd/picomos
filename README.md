@@ -1,5 +1,10 @@
 # picomos
 
+[![release](https://img.shields.io/github/v/release/johnwbyrd/picomos?include_prereleases&label=nightly)](https://github.com/johnwbyrd/picomos/releases/tag/nightly)
+[![build](https://github.com/johnwbyrd/picomos/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/johnwbyrd/picomos/actions/workflows/release.yml)
+[![license](https://img.shields.io/badge/license-BSD--3--Clause-blue)](LICENSE)
+[![downloads](https://img.shields.io/github/downloads/johnwbyrd/picomos/total)](https://github.com/johnwbyrd/picomos/releases)
+
 A batteries-included cross-development SDK for MOS 6502-family targets.
 One directory contains a full [llvm-mos](https://llvm-mos.org/) toolchain,
 a [picolibc](https://github.com/picolibc/picolibc) sysroot, per-machine
@@ -14,12 +19,50 @@ mos-clang --config=$PICOMOS/share/picomos/configs/picomos-c64.cfg \
 No picomos-specific tools. No shell wrappers around clang. Nothing on your
 PATH except what you extracted from the tarball.
 
+![HELLO, PICOMOS! running on the c64 in MAME](docs/screenshots/c64-hello.png)
+
+*picomos-built PRG running on MAME's `c64` driver — `puts()` → picolibc
+stdio hook → KERNAL CHROUT → screen.*
+
 > **Status: pre-release.** No versioned tag has been cut yet, but every
 > push to `main` produces a rolling `nightly` bundle for each host —
 > pull it from
 > [github.com/johnwbyrd/picomos/releases/tag/nightly](https://github.com/johnwbyrd/picomos/releases/tag/nightly)
 > (or use the direct URLs in [Quick start](#quick-start) below). Contents
 > change on every push; the URLs stay the same.
+
+## Contents
+
+- [Why picomos?](#why-picomos)
+- [Supported hosts and targets](#supported-hosts-and-targets)
+- [Quick start](#quick-start)
+- [What's in the SDK](#whats-in-the-sdk)
+- [Building your program](#building-your-program)
+- [Running under an emulator](#running-under-an-emulator)
+- [Troubleshooting](#troubleshooting)
+- [How it fits together](#how-it-fits-together)
+- [Building the SDK yourself](#building-the-sdk-yourself)
+- [License](#license)
+
+## Why picomos?
+
+- **vs [cc65](https://cc65.github.io/):** cc65 is the classic 6502 C
+  toolchain and its runtime library is excellent, but its compiler
+  is pre-C99 with limited optimization. picomos pairs the full
+  [llvm-mos](https://llvm-mos.org/) LLVM backend for 6502 — modern C
+  (through C23), whole-program LTO, and clang-syntax inline asm.
+- **vs [llvm-mos-sdk](https://github.com/llvm-mos/llvm-mos-sdk):**
+  llvm-mos-sdk bundles llvm-mos with a lightweight cc65-derived libc.
+  picomos bundles llvm-mos with **picolibc** instead — a
+  standards-conformant C library with proper `<stdio.h>`, `<math.h>`,
+  floating-point, and hookable TinyStdio. Better fit when you want the
+  C standard library on a 6502.
+- **vs "just build llvm-mos + picolibc yourself":** you can, and it
+  takes 2-3 hours plus a stack of config-file plumbing to get a working
+  hello-world. picomos does the plumbing once, ships a self-contained
+  directory that "just works" on Linux, macOS, and Windows, and gives
+  you `find_package(Picomos)` for CMake plus `ctest` support out of
+  the box.
 
 ## Supported hosts and targets
 
@@ -39,10 +82,23 @@ machines — one download builds for every machine picomos supports.
 
 ## Quick start
 
+First, install MAME — the SDK does not bundle it:
+
+| Platform         | Command                                      |
+|------------------|----------------------------------------------|
+| Ubuntu / Debian  | `sudo apt install mame`                      |
+| Fedora           | `sudo dnf install mame`                      |
+| macOS (Homebrew) | `brew install mame`                          |
+| Windows          | `winget install MameDev.MAME` — or grab an installer from [mamedev.org/release.html](https://mamedev.org/release.html) |
+
+Then:
+
+<details open>
+<summary><b>Linux / macOS (bash)</b></summary>
+
 ```sh
 # 1. Download and extract the current nightly bundle for your host
-#    (macOS: swap in picomos-nightly-macos-arm64.tar.xz;
-#     Windows: picomos-nightly-windows-x86_64.zip)
+#    (macOS: swap in picomos-nightly-macos-arm64.tar.xz)
 curl -LO https://github.com/johnwbyrd/picomos/releases/download/nightly/picomos-nightly-linux-x86_64.tar.xz
 tar xf picomos-nightly-linux-x86_64.tar.xz
 export PICOMOS=$PWD/picomos-nightly-linux-x86_64
@@ -58,10 +114,41 @@ EOF
 mos-clang --config=$PICOMOS/share/picomos/configs/picomos-zbc.cfg \
           hello.c -o hello.elf
 
-# 4. Run under the machine's emulator (MAME must be installed separately)
+# 4. Run under the machine's emulator
 mame zbcm6502 -window -skip_gameinfo \
     -elfload hello.elf -seconds_to_run 5
 ```
+
+</details>
+
+<details>
+<summary><b>Windows (PowerShell)</b></summary>
+
+```powershell
+# 1. Download and extract the current nightly bundle
+Invoke-WebRequest `
+    -Uri https://github.com/johnwbyrd/picomos/releases/download/nightly/picomos-nightly-windows-x86_64.zip `
+    -OutFile picomos.zip
+Expand-Archive picomos.zip
+$env:PICOMOS = "$PWD\picomos-nightly-windows-x86_64"
+$env:PATH    = "$env:PICOMOS\bin;$env:PATH"
+
+# 2. Write hello world
+@'
+#include <stdio.h>
+int main(void) { puts("hello, mos"); return 0; }
+'@ | Set-Content hello.c
+
+# 3. Build for a machine
+mos-clang --config=$env:PICOMOS\share\picomos\configs\picomos-zbc.cfg `
+          hello.c -o hello.elf
+
+# 4. Run under the machine's emulator
+mame zbcm6502 -window -skip_gameinfo `
+    -elfload hello.elf -seconds_to_run 5
+```
+
+</details>
 
 For zbc, output arrives on the host's stdout via the ZBC semihost device.
 For c64, output shows in the MAME window — see [machines/c64/README.md](machines/c64/README.md)
@@ -184,6 +271,59 @@ allows plural emulators per machine (`picomos_run(hello EMULATOR vice)`
 is intended to work once vice runners land — currently only MAME is
 verified).
 
+## Troubleshooting
+
+**MAME says `901226-01.u3 NOT FOUND` (or similar `.uXX` file names).**
+You're missing Commodore's original ROMs — MAME needs the C64
+BASIC/KERNAL/character ROMs in a `c64.zip` under its `rompath`. MAME
+lists the exact filenames it looked for. Legitimate sources include
+CBM's own redistribution license, or dumps from your own hardware. The
+`zbc` machine needs no external ROMs.
+
+**`mame: command not found`.** Install MAME per the
+[Quick start](#quick-start) table. If it's installed to a non-standard
+path, either add it to `PATH` or point picomos at it directly:
+`PICOMOS_MAME=/opt/mame/mame cmake --build build --target run-hello`.
+
+**macOS: "cannot verify developer" / "…is damaged and can't be opened".**
+picomos binaries are unsigned; Gatekeeper quarantines them on
+first-run. Strip the quarantine bit after extraction:
+
+```sh
+xattr -dr com.apple.quarantine picomos-nightly-macos-arm64/
+```
+
+**Windows: `ninja: not found` from CMake.** Install ninja
+(`winget install Kitware.Ninja`) or install CMake with the "add to
+PATH" option — modern CMake installers bundle ninja.
+
+**Windows: `mos-clang: not found` after extraction.** PowerShell's
+`Expand-Archive` sometimes drops execute permissions or preserves the
+inner `picomos-nightly-windows-x86_64\` folder inside another folder.
+Double-check `$env:PICOMOS\bin\mos-clang.exe` actually exists and that
+`$env:PATH` was set with a backslash: `"$env:PICOMOS\bin;$env:PATH"`.
+
+**Linker error `undefined reference to _start` / `cannot find -lc`.**
+The `--config=picomos-<machine>.cfg` flag wasn't passed, or `$PICOMOS`
+is wrong. Sanity check:
+
+```sh
+ls $PICOMOS/share/picomos/configs/         # should list picomos-*.cfg
+$PICOMOS/bin/mos-clang --version           # should print "Target: mos"
+```
+
+**c64 program runs but the terminal shows only the KERNAL banner (no
+program output).** The bundled `runner-mame.lua` mirrors CHROUT
+(`$FFD2`) to the terminal — if your program writes directly to screen
+RAM (`*(volatile char*)0x0400 = 'H'`) instead of going through
+`puts()` / `printf()`, the bytes never pass through CHROUT and won't
+appear in the captured stream. Look at the MAME window itself in that
+case.
+
+**`ctest` says "No tests were found!!!".** `enable_testing()` must be
+called *before* `find_package(Picomos)` and any `picomos_add_test()`
+invocation in your `CMakeLists.txt`.
+
 ## How it fits together
 
 - **llvm-mos** — the compiler + linker. `mos-clang` is llvm-mos's clang
@@ -254,4 +394,8 @@ if you want to exclude it from a build.
 
 ## License
 
-TBD. Likely BSD-3-Clause to match picolibc.
+picomos itself is [BSD-3-Clause](LICENSE) — matching picolibc's core
+license so downstream bundling doesn't add friction. Bundled components
+carry their own licenses (llvm-mos is Apache-2.0 WITH LLVM-exception,
+picolibc is a mix of permissive BSD-style licenses inherited from
+newlib); see [LICENSE](LICENSE) for the full attribution list.

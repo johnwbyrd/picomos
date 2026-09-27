@@ -10,6 +10,6 @@
 int
 main(void)
 {
-    puts("hello, mos");
+    puts("HELLO, PICOMOS!");
     return 0;
 }
