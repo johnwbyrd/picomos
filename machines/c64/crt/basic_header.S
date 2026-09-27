@@ -4,10 +4,16 @@
 ; and RUN, the BASIC interpreter walks a linked list of tokenised
 ; program lines starting there. We emit exactly one line:
 ;
-;     10 SYS <_start-as-4-decimal-digits>
+;     10 SYS <__do_init_stack-as-4-decimal-digits>
 ;
-; which transfers control to _start via a JSR. When main returns, RTS
-; comes back to BASIC.
+; which transfers control to picolibc's __do_init_stack — NOT _start
+; directly. __do_init_stack is in .init.100 in libcrt0-*, and its
+; job is to load __stack into the __rc0/__rc1 soft-stack pointer,
+; then jmp _start. Skipping this step leaves the soft stack pointing
+; at whatever was in zero page at boot (usually garbage), and any
+; picolibc function call — malloc, printf, even puts eventually —
+; ends up storing through a corrupt indirect pointer.
+; When main returns, RTS comes back to BASIC.
 ;
 ; Layout (12 bytes):
 ;   +0  .word next_line   ; pointer to next BASIC line ($0000 = end)
@@ -29,6 +35,7 @@
 	.short 7773            ; line number: "LLVM" in leetspeak (hint that
 	                       ; this program was built with an llvm-mos SDK)
 	.byte  0x9e            ; SYS token
-	.mos_addr_asciz _start, 4  ; 4-digit ASCII decimal address of _start
+	.mos_addr_asciz __do_init_stack, 4  ; 4-digit decimal address of
+	                       ; picolibc's soft-stack initialiser
 next_line:
 	.short 0               ; end-of-program marker

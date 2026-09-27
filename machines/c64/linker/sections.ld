@@ -62,10 +62,24 @@ SECTIONS {
     } > ram
 
     .text : {
-        /* picolibc's _start lives in .text.init.enter — must be
-         * findable, but its address ends up in whatever slot the
-         * BASIC SYS stub encodes at link time via .mos_addr_asciz. */
+        /* picolibc / llvm-mos crt0 splits its boot code across
+         * priority-ordered .init.NN sections that call each other in
+         * fall-through order:
+         *
+         *   .text.init.enter  -- picolibc's `_start` entry code
+         *   .init.50          -- hardware stack (LDX #$FF; TXS)
+         *   .init.100         -- soft stack (__do_init_stack)
+         *   .init.150         -- __libc_init_array (no-op here)
+         *   .init.250         -- late init; falls into main() call
+         *
+         * All of them MUST be linked in and MUST end up in this order,
+         * or main() will run with an uninitialised software stack — on
+         * the c64 that trashes zero page and, via garbage soft-stack
+         * indirect stores, random pages of RAM.
+         */
         KEEP(*(.text.init.enter))
+        KEEP(*(.data.init.enter))
+        KEEP(*(SORT_BY_NAME(.init) SORT_BY_NAME(.init.*)))
         *(.text .text.* .literal .literal.*)
     } > ram
 

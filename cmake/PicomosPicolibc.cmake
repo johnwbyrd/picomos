@@ -110,6 +110,36 @@ else()
         list(APPEND _picolibc_depends DEPENDS llvm-mos)
     endif()
 
+    # -----------------------------------------------------------------
+    # picolibc meson args tuned for a 16-bit-pointer 6502 target.
+    #
+    # Defaults are geared toward 32-bit Cortex-M and similar; on 6502
+    # several of them silently break at runtime (printf hangs, malloc
+    # header alignment goes wrong, variable-shift helpers assume
+    # 32-bit ABI). Fixed selection:
+    #
+    #   format-default=i         Integer-only printf. Pulls no float
+    #                            code — soft-float on 6502 is either
+    #                            10+ KiB of code or infinite-loops
+    #                            depending on which glibc-derived
+    #                            routine gets selected.
+    #   io-long-long=false       Skip 64-bit int in printf/scanf.
+    #                            No 6502 program cares.
+    #   posix-console=false      Do not route stdout/stdin through
+    #                            POSIX fd 0/1. picomos machines
+    #                            provide their own stdout via
+    #                            FDEV_SETUP_STREAM.
+    #   stdio-locking=false      Single-threaded target; skip the
+    #                            file-locking primitives.
+    #   single-thread=true       Everything runs on one CPU thread.
+    #   atomic-ungetc=false      picolibc's atomic ungetc emits
+    #                            builtin_atomic calls that clang's
+    #                            MOS backend does not synthesize.
+    #   newlib-obsolete-math=false  Force the modern math routines.
+    #
+    # If you're targeting a different profile (double printf, POSIX
+    # I/O, etc.) rebuild picolibc yourself and point PICOMOS_PICOLIBC_
+    # PREBUILT at the resulting tarball.
     ExternalProject_Add(picolibc-mos
         SOURCE_DIR      "${_picolibc_src}"
         BINARY_DIR      "${CMAKE_BINARY_DIR}/picolibc-build"
@@ -119,6 +149,13 @@ else()
                 --prefix /usr
                 -Dtests=false
                 -Dmultilib=false
+                -Dformat-default=i
+                -Dio-long-long=false
+                -Dposix-console=false
+                -Dstdio-locking=false
+                -Dsingle-thread=true
+                -Datomic-ungetc=false
+                -Dnewlib-obsolete-math=false
                 <BINARY_DIR> <SOURCE_DIR>
         BUILD_COMMAND
             ${NINJA_EXE} -C <BINARY_DIR>

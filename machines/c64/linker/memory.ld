@@ -34,3 +34,13 @@ MEMORY {
 /* Soft stack grows downward from just below BASIC ROM. picolibc's
  * machine_mos_init-stack.S copies this into __rc0/__rc1 at _start. */
 __stack = 0xA000;
+
+/*
+ * Heap for picolibc's fallback sbrk / malloc. Grows upward from just
+ * after .bss (__bss_end is provided by picolibc_noflash.ld's SECTIONS
+ * layout) toward the soft stack. Reserve 512 bytes at the top for the
+ * soft stack — enough for a dozen nested calls with modest locals.
+ * Programs with deeper call chains can override __heap_end downwards.
+ */
+__heap_start = __bss_end;
+__heap_end   = __stack - 0x1000;   /* reserve 4 KB for soft stack */
