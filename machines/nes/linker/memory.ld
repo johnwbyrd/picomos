@@ -37,3 +37,15 @@ MEMORY {
  * (The hardware stack lives in page 1 and is managed by the CPU.)
  */
 __stack = 0x0800;
+
+/*
+ * Heap for picolibc's fallback sbrk / malloc. Grows upward from just
+ * past .bss (__bss_end is set by sections.ld) toward the soft stack.
+ * Reserve 256 bytes at the top of RAM for the soft stack — enough
+ * for typical printf/malloc call depth in a hello-world-scale
+ * program. On NES this is genuinely tight (~1 KiB heap total), so
+ * programs with real memory needs will want to override __heap_end
+ * or move to a mapper with PRG-RAM.
+ */
+__heap_start = __bss_end;
+__heap_end   = __stack - 0x100;

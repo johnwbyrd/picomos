@@ -99,6 +99,18 @@ SECTIONS {
     __bss_size = __bss_end - __bss_start;
 
     /*
+     * llvm-mos emits `.noinit` sections for compiler-managed static
+     * spill areas (whole-program soft-stack frames when the small
+     * fixed frame allocator is used, and any user variable declared
+     * with __attribute__((section(".noinit")))). They must land in
+     * RAM but need no initialisation. Placing them after .bss avoids
+     * bloating the ROM image.
+     */
+    .noinit (NOLOAD) : {
+        *(.noinit .noinit.*)
+    } > ram
+
+    /*
      * Reset/NMI/IRQ vectors at $FFFA. NMI first, then RESET points at
      * our own _start, then IRQ. `nmi_handler` and `irq_handler` are
      * weak-defined by startup.S as bare `rti`s; user code can override.
