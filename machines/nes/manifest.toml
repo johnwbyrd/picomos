@@ -1,0 +1,29 @@
+# NES / Famicom — MAME's nes driver.
+#
+# Simplest working configuration: NROM-128 (mapper 0), 16 KB PRG-ROM at
+# $C000-$FFFF, 8 KB CHR-RAM, no bank switching. Programs are packaged
+# as iNES 2.0 (.nes) files and loaded via MAME's `-cart` slot.
+#
+# The NES has no ROM CHROUT primitive. picomos routes `__putchar`
+# through a store to $401B (an otherwise-unused MMIO register); the
+# bundled runner-mame.lua taps writes at that address and streams each
+# byte to the emulator subprocess's stdout. Real hardware would need
+# an alternative __putchar (PPU nametable writes, serial cart, etc.);
+# see io/README.md for how to override.
+
+name         = "nes"
+display_name = "NES (MAME nes)"
+cpu          = "6502"
+endianness   = "little"
+
+[memory]
+description = "2 KB internal RAM $0000-$07FF, PPU regs $2000-$2007, APU/IO $4000-$4017, PRG-ROM $C000-$FFFF (16 KB, NROM-128), 8 KB CHR-RAM"
+
+[emulator]
+supported = ["mame"]
+default   = "mame"
+
+[emulator.mame]
+driver         = "nes"
+requires_roms  = false
+notes          = "MAME's nes driver runs standalone (no BIOS ROM needed for standard NROM cartridges). Loads .nes iNES 2.0 images via -cart."
