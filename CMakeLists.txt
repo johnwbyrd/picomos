@@ -34,25 +34,35 @@ picolibc has no MOS arch yet.")
 set(PICOMOS_PICOLIBC_REF "feature/upstream-rebase-2026-09" CACHE STRING
     "picolibc git tag/branch/SHA to fetch when PICOMOS_PICOLIBC_SOURCE is empty.")
 
-# Default machine list = every subdir of machines/ that carries a
-# CMakeLists.txt. Consumers or CI can override to build a subset:
-# -DPICOMOS_MACHINES="zbc" to skip c64, etc. Adding a new machine
-# means dropping a directory under machines/ — no top-level edit here.
+# Default machine list = every subdir of machines/ that declares a
+# non-abstract machine.cmake. Consumers or CI can override to build a
+# subset: -DPICOMOS_MACHINES="zbc" to skip c64, etc. Adding a new
+# machine means dropping a directory under machines/ — no top-level
+# edit here.
+#
+# Abstract machines (declared via picomos_machine(<name> ABSTRACT ...))
+# exist to be inherited from and are filtered out of the default set;
+# the ABSTRACT keyword is grepped for as a cheap heuristic to avoid
+# having to include+parse every machine.cmake up here.
 file(GLOB _picomos_machine_dirs
     RELATIVE "${CMAKE_SOURCE_DIR}/machines"
     "${CMAKE_SOURCE_DIR}/machines/*")
 set(_picomos_default_machines "")
 foreach(_m IN LISTS _picomos_machine_dirs)
-    if(IS_DIRECTORY "${CMAKE_SOURCE_DIR}/machines/${_m}"
-       AND EXISTS "${CMAKE_SOURCE_DIR}/machines/${_m}/CMakeLists.txt")
-        list(APPEND _picomos_default_machines "${_m}")
+    set(_mc "${CMAKE_SOURCE_DIR}/machines/${_m}/machine.cmake")
+    if(IS_DIRECTORY "${CMAKE_SOURCE_DIR}/machines/${_m}" AND EXISTS "${_mc}")
+        file(READ "${_mc}" _mc_contents)
+        if(NOT _mc_contents MATCHES "picomos_machine[ \t\r\n]*\\([^)]*ABSTRACT")
+            list(APPEND _picomos_default_machines "${_m}")
+        endif()
     endif()
 endforeach()
 
 set(PICOMOS_MACHINES "${_picomos_default_machines}" CACHE STRING
-    "Semicolon-separated list of machines to build. Defaults to every \
-subdir of machines/ that contains a CMakeLists.txt (auto-discovered). \
-Override to build a subset, e.g. -DPICOMOS_MACHINES=zbc.")
+    "Semicolon-separated list of concrete machines to build. Defaults \
+to every subdir of machines/ whose machine.cmake declares a non-abstract \
+machine (auto-discovered). Override to build a subset, e.g. \
+-DPICOMOS_MACHINES=zbc.")
 
 option(PICOMOS_INSTALL_TOOLCHAIN
     "Install the llvm-mos toolchain into <prefix>/bin/ (off during dev when \
@@ -67,13 +77,11 @@ include(cmake/PicomosLlvmMos.cmake)   # PICOMOS_MOS_CLANG, PICOMOS_MOS_AR, PICOM
 include(cmake/PicomosPicolibc.cmake)  # sets PICOMOS_SYSROOT + PICOMOS_PICOLIBC_STAGING
 
 # --- Build each enabled machine overlay -----------------------------------
+# machines/CMakeLists.txt walks every machine.cmake, registers the machines
+# (concrete and abstract), and then emits build rules only for the concrete
+# ones listed in PICOMOS_MACHINES.
 
-foreach(machine IN LISTS PICOMOS_MACHINES)
-    if(NOT EXISTS "${CMAKE_SOURCE_DIR}/machines/${machine}/CMakeLists.txt")
-        message(FATAL_ERROR "No such machine: ${machine}")
-    endif()
-    add_subdirectory(machines/${machine})
-endforeach()
+add_subdirectory(machines)
 
 # --- Install PicomosConfig.cmake + PicomosApp.cmake for find_package() ----
 
