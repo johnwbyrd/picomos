@@ -173,9 +173,11 @@ picomos-X.Y.Z-<host>/
 │       ├── lib/               picolibc libc.a, libm.a, crt0 variants
 │       └── share/picomos/
 │           └── machines/      per-machine overlay
-│               ├── zbc/       link.ld, runners.cmake, manifest.toml
+│               ├── zbc/       link.ld, runners.cmake
+│               ├── nes/       link.ld, crt0.o, libio.a, runners.cmake,
+│               │              runner-mame.lua
 │               └── c64/       link.ld, crt0.o, libio.a, runners.cmake,
-│                              runner-mame.lua, manifest.toml
+│                              runner-mame.lua
 └── share/picomos/
     ├── configs/               clang config files (--config= consumes)
     │   ├── picomos-zbc.cfg
@@ -269,11 +271,11 @@ The SDK does **not** bundle MAME — install it separately (`apt install mame`,
 
 Override the MAME binary with the `PICOMOS_MAME` environment variable
 when using the CMake `picomos_run` target, or invoke MAME directly with
-its full path if you prefer. Which emulator each machine supports is
-declared in [`machines/<name>/runners.cmake`](machines/); the design
-allows plural emulators per machine (`picomos_run(hello EMULATOR vice)`
-is intended to work once vice runners land — currently only MAME is
-verified).
+its full path if you prefer. Which emulators each machine supports is
+declared via `picomos_emulator()` calls in
+[`machines/<name>/machine.cmake`](machines/); the design allows plural
+emulators per machine (`picomos_run(hello EMULATOR vice)` is intended
+to work once vice runners land — currently only MAME is verified).
 
 ## Troubleshooting
 
@@ -370,8 +372,9 @@ cmake --build build
 cmake --install build --prefix ./stage
 ```
 
-Every subdirectory of `machines/` with a `CMakeLists.txt` is built by
-default. Restrict to a subset with e.g. `-DPICOMOS_MACHINES=zbc`.
+Every subdirectory of `machines/` with a `machine.cmake` that declares
+a non-abstract machine is built by default. Restrict to a subset with
+e.g. `-DPICOMOS_MACHINES=zbc`.
 
 Full CMake option reference lives at the top of
 [CMakeLists.txt](CMakeLists.txt). The CI matrix that produces the shipped
@@ -379,22 +382,28 @@ bundles is [.github/workflows/release.yml](.github/workflows/release.yml).
 
 ### Adding a new machine
 
-Copy `machines/zbc/` or `machines/c64/` as a starting point and adjust:
+Copy `machines/zbc/` or `machines/nes/` as a starting point and adjust:
 
-- `manifest.toml` — display name, CPU, emulator.
-- `linker/memory.ld` + `linker/sections.ld` — memory map and any bespoke
-  section layout.
-- `crt/*.S` — machine startup (only if picolibc's shipped crt0 variants
-  don't fit).
-- `io/*.c` + `*.S` — machine I/O backend (only if you need one beyond
-  picolibc's semihost).
-- `run.sh` — emulator invocation.
-- `CMakeLists.txt` — one call to `picomos_machine(<name> ...)`.
+- `machine.cmake` — the single source of truth per machine.
+  `picomos_machine(<name> DISPLAY_NAME ... CPU ... MEMORY_MAP ...)`
+  registers the machine; one or more `picomos_emulator(<name> <emul> ...)`
+  calls declare how to run it. `INHERITS <parent>` pulls sources and
+  metadata from an abstract base machine — see
+  [`machines/cbm/`](machines/cbm/) for a worked example (c64 inherits
+  from it and drops all the shared PETSCII/CHROUT/BASIC-loader pieces).
+- `linker/memory.ld` + `linker/sections.ld` — memory map and section
+  layout. Auto-discovered.
+- `crt/*.[cS]` — machine startup, only if picolibc's shipped crt0
+  variants don't fit. Auto-discovered.
+- `io/*.[cS]` — machine I/O backend, only if you need one beyond
+  picolibc's semihost. Auto-discovered.
+- `runner-mame.lua` (or `runner-<emulator>.lua`/`.py`) — optional MAME
+  Lua plugin, referenced from a `picomos_emulator()` call.
 
 The new machine's directory is auto-discovered by picomos's top-level
-CMakeLists.txt and lands in the SDK bundle alongside the existing
-targets — no top-level edit needed. Use `-DPICOMOS_MACHINES=<subset>`
-if you want to exclude it from a build.
+`machines/CMakeLists.txt` and lands in the SDK bundle alongside the
+existing targets — no top-level edit needed. Use
+`-DPICOMOS_MACHINES=<subset>` if you want to exclude it from a build.
 
 ## License
 
