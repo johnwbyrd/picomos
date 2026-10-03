@@ -270,8 +270,10 @@ The SDK does **not** bundle MAME — install it separately (`apt install mame`,
   emulated C64 screen (not the host terminal).
 
 Override the MAME binary with the `PICOMOS_MAME` environment variable
-when using the CMake `picomos_run` target, or invoke MAME directly with
-its full path if you prefer. Which emulators each machine supports is
+when using the CMake `picomos_run` target — set it on the `cmake -B`
+configure line, not on `cmake --build`, since the resolved path is
+baked into the custom target at configure time. Or invoke MAME directly
+with its full path if you prefer. Which emulators each machine supports is
 declared via `picomos_emulator()` calls in
 [`machines/<name>/machine.cmake`](machines/); the design allows plural
 emulators per machine (`picomos_run(hello EMULATOR vice)` is intended
@@ -288,8 +290,27 @@ CBM's own redistribution license, or dumps from your own hardware. The
 
 **`mame: command not found`.** Install MAME per the
 [Quick start](#quick-start) table. If it's installed to a non-standard
-path, either add it to `PATH` or point picomos at it directly:
-`PICOMOS_MAME=/opt/mame/mame cmake --build build --target run-hello`.
+path, either add it to `PATH` or point picomos at it directly — note
+that `PICOMOS_MAME` is read at CMake **configure** time, not build time,
+so set it on the `cmake -B` line:
+
+```sh
+PICOMOS_MAME=/opt/mame/mame cmake -B build -G Ninja \
+    -DCMAKE_TOOLCHAIN_FILE=$PICOMOS/share/picomos/cmake/mos-toolchain.cmake \
+    -DPicomos_DIR=$PICOMOS/share/picomos/cmake
+cmake --build build --target run-hello
+```
+
+**MAME can't find its ROMs even though they're on disk.** MAME searches
+its default `rompath` (`~/.mame/`, `/usr/share/mame/roms/`, ...). A
+self-built MAME typically keeps its ROMs under its own source dir and
+has no default rompath — either `cd` into that dir before invoking
+`cmake --build`, or pass an explicit rompath via `picomos_run`'s
+`EXTRA_ARGS`:
+
+```cmake
+picomos_run(hello TIMEOUT 10 EXTRA_ARGS -rompath /path/to/mame/roms)
+```
 
 **macOS: "cannot verify developer" / "…is damaged and can't be opened".**
 picomos binaries are unsigned; Gatekeeper quarantines them on
