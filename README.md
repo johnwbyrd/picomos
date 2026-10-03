@@ -110,13 +110,20 @@ cat > hello.c <<'EOF'
 int main(void) { puts("hello, mos"); return 0; }
 EOF
 
-# 3. Build for a machine (pick zbc or c64)
-mos-clang --config=$PICOMOS/share/picomos/configs/picomos-zbc.cfg \
-          hello.c -o hello.elf
+# 3. Build for the C64 (produces a Commodore PRG directly — no objcopy)
+mos-clang --config=$PICOMOS/share/picomos/configs/picomos-c64.cfg \
+          hello.c -o hello.prg
 
-# 4. Run under the machine's emulator
-mame zbcm6502 -window -skip_gameinfo \
-    -elfload hello.elf -seconds_to_run 5
+# 4. Run under MAME's c64 driver. The bundled lua plugin auto-types RUN
+#    once the KERNAL reaches READY and mirrors every CHROUT byte to the
+#    terminal, so you see "hello, mos" on host stdout as well as in the
+#    emulator window. Requires Commodore's BASIC/KERNAL/character ROMs
+#    in your MAME romset — see Troubleshooting if MAME complains.
+mame c64 -window -skip_gameinfo \
+    -quik hello.prg \
+    -plugins -autoboot_script \
+        $PICOMOS/mos-elf/usr/share/picomos/machines/c64/runner-mame.lua \
+    -seconds_to_run 10
 ```
 
 </details>
@@ -139,21 +146,32 @@ $env:PATH    = "$env:PICOMOS\bin;$env:PATH"
 int main(void) { puts("hello, mos"); return 0; }
 '@ | Set-Content hello.c
 
-# 3. Build for a machine
-mos-clang --config=$env:PICOMOS\share\picomos\configs\picomos-zbc.cfg `
-          hello.c -o hello.elf
+# 3. Build for the C64 (produces a Commodore PRG directly — no objcopy)
+mos-clang --config=$env:PICOMOS\share\picomos\configs\picomos-c64.cfg `
+          hello.c -o hello.prg
 
-# 4. Run under the machine's emulator
-mame zbcm6502 -window -skip_gameinfo `
-    -elfload hello.elf -seconds_to_run 5
+# 4. Run under MAME's c64 driver. The bundled lua plugin auto-types RUN
+#    and mirrors every CHROUT byte to the terminal. Requires Commodore's
+#    BASIC/KERNAL/character ROMs in your MAME romset — see
+#    Troubleshooting if MAME complains.
+mame c64 -window -skip_gameinfo `
+    -quik hello.prg `
+    -plugins -autoboot_script `
+        $env:PICOMOS\mos-elf\usr\share\picomos\machines\c64\runner-mame.lua `
+    -seconds_to_run 10
 ```
 
 </details>
 
-For zbc, output arrives on the host's stdout via the ZBC semihost device.
-For c64, output shows in the MAME window — see [machines/c64/README.md](machines/c64/README.md)
-for the exact MAME command (uses `-quik` plus a bundled lua plugin that
-auto-types RUN once the KERNAL reaches READY).
+Output appears both in the MAME window (as the C64 renders it via the
+KERNAL screen editor) and on the host terminal (via the bundled lua
+plugin's CHROUT tap). To try the semihost-only `zbc` machine instead
+— no ROMs required, output on host stdout only — swap `c64` → `zbc`,
+`.prg` → `.elf`, and the MAME line to:
+
+```sh
+mame zbcm6502 -window -skip_gameinfo -elfload hello.elf -seconds_to_run 5
+```
 
 If you're using CMake, the [CMake workflow](#cmake) below gives you a
 `run-hello` build target that invokes MAME for you — no bash script, no
